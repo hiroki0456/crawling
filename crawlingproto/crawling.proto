@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package crawlingproto;
+option go_package = "crawlingproto/";
+
+message UserInput {
+    string userID = 1;
+}
+
+message BankInfo {
+    int64 bank_sum = 1;
+    int64 bank_count = 2;
+    string bank_name = 3;
+    int64 bank_amount = 4;
+}
+
+message CardInfo {
+    int64 card_sum = 1;
+    int64 card_count = 2;
+    string card_name = 3;
+    int64 card_amount = 4;
+}
+
+message DetailInfo {
+    int64 detail_count = 1;
+    string detail_name = 2;
+    string contents = 3;
+    int32 payment_type = 4;
+    int64 amount = 5;
+}
+
+message UserRequest {
+    UserInput userInput = 1;
+    string pass = 2;
+    int32 site_kind = 3;
+}
+
+message ApiResponse {
+    BankInfo bankInfo = 1;
+    CardInfo cardInfo = 2;
+    DetailInfo detailInfo = 3;
+}
+
+service CrawlingService {
+    rpc userHandler(UserRequest) returns (ApiResponse) {};
+}
