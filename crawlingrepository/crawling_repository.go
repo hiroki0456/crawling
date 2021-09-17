@@ -1,31 +1,15 @@
 package crawlingrepository
 
 import (
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 	"github.com/sclevine/agouti"
 	"upsider.crawling/crawlingproto"
 )
-
-// type CrawlingRepository interface {
-// 	FreeeCrawling(pass string, input *crawlingproto.UserInput) (dom string, err error)
-// }
-
-// type crawlingRepository struct{}
-
-// func NewCrawling() CrawlingRepository {
-// 	return &crawlingRepository{}
-// }
-type sumAndBunk struct {
-	sum      string
-	bunkName []string
-}
 
 type CrawlingSite struct {
 	Pass  string
@@ -36,8 +20,28 @@ type Freee struct {
 	CrawlingSite
 }
 
-func (f *Freee) Crawling() (dom string, err error) {
+type Bunk struct {
+	Id     string `spanner:"Id"`
+	UserId string `spanner:"UserId"`
+	BunkId string `spanner:"BunkName"`
+	Amount int64  `spanner:"Amount"`
+	Kind   string `spanner:"Kind"`
+}
 
+type Detail struct {
+	Id             string `spanner:"Id"`
+	UserId         string `spanner:"UserId"`
+	BunkName       string `spanner:"BunkName"`
+	TradingDate    string `spanner:"TradingDate"`
+	TradingContent string `spanner:"TradingContent"`
+	Payment        int64  `spanner:"Payment"`
+	Withdrawal     int64  `spanner:"Withdrawal"`
+	Balance        int64  `spanner:"Balance"`
+	UpdatedDate    string `spanner:"UpdatedDate"`
+	GettingDate    string `spanner:"GettingDate"`
+}
+
+func (f *Freee) Crawling() ([]*Bunk, []*Detail, error) {
 	driver := agouti.ChromeDriver()
 	defer driver.Stop()
 
@@ -60,63 +64,106 @@ func (f *Freee) Crawling() (dom string, err error) {
 	page.FindByXPath("/html/body/div[3]/div/div[1]/form/div/div[3]/input").Fill(f.CrawlingSite.Pass)
 	page.FindByXPath("/html/body/div[3]/div/div[1]/form/div/div[5]/input").Click()
 
-	time.Sleep(10 * time.Second)
-
-	dom, err = page.HTML()
+	dom, err := page.HTML()
 	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
 
-	sumAndBunk, err := bunkAndSum(dom)
+	bunks, err := bunkAndSum(dom)
 	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
 
-	fmt.Println(sumAndBunk)
+	err = page.Navigate("https://secure.freee.co.jp/wallet_txns")
+	if err != nil {
+		return nil, nil, err
+	}
 
-	page.Navigate("https://secure.freee.co.jp/wallet_txns")
-	time.Sleep(10 * time.Second)
-	return dom, nil
+	page.SetImplicitWait(10)
+
+	pagenationDOM := page.FindByXPath("/html/body/div[2]/div/div/div[3]/div/ul").All("li")
+	count, _ := pagenationDOM.Count()
+	count -= 2
+	detailList := []*Detail{}
+	for i := 0; i < count; i++ {
+		pagenationDOM.At(i + 1).Find("a").Click()
+		page.SetImplicitWait(10)
+		dom, _ = page.HTML()
+		detail, err := details(dom)
+		if err != nil {
+			return nil, nil, err
+		}
+		detailList = append(detailList, detail...)
+	}
+	// dom, err = page.HTML()
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	return bunks, detailList, nil
+
+	// fmt.Println(sumAndBunk)
 }
 
-func bunkAndSum(dom string) (*sumAndBunk, error) {
+func bunkAndSum(dom string) ([]*Bunk, error) {
 	readerCurContents := strings.NewReader(dom)
 	contentsDom, err := goquery.NewDocumentFromReader(readerCurContents)
 	if err != nil {
 		return nil, err
 	}
-	sum := 0
-	contentsDom.Find("div.walletable_group___StyledDiv6-sc-1uncx9n-5").Each(func(i int, v *goquery.Selection) {
-		strs := strings.Split(v.Text(), ",")
-		strNum := ""
-		for _, v := range strs {
-			strNum += v
-		}
-		intNum, err := strconv.Atoi(strNum)
-		if err != nil {
-			return
-		}
-		sum += intNum
-	})
-	commaNum := humanize.Comma(int64(sum))
 
-	bunkNames := []string{}
-	contentsDom.Find("a.walletable___StyledA-sc-3etvmj-3").Each(func(i int, v *goquery.Selection) {
-		bunkNames = append(bunkNames, v.Text())
+	bunks := []*Bunk{}
+	contentsDom.Find("section.vb-contentsBase").Each(func(i int, v1 *goquery.Selection) {
+		v1.Find("div.walletable___StyledDiv-sc-3etvmj-0").Each(func(i int, v2 *goquery.Selection) {
+			strAmount := v2.Find("div.walletable___StyledDiv8-sc-3etvmj-8").Text()
+			strAmount = strings.Replace(strAmount, ",", "", -1)
+			amount, _ := strconv.ParseInt(strAmount, 10, 64)
+			id, _ := uuid.NewRandom()
+			bunks = append(bunks, &Bunk{
+				Id:     id.String(),
+				BunkId: v2.Find("a.walletable___StyledA-sc-3etvmj-3").Text(),
+				Amount: amount,
+				Kind:   v1.Find("h2.vb-sectionTitle").Text(),
+			})
+		})
 	})
 
-	fmt.Println(bunkNames)
-
-	return &sumAndBunk{sum: commaNum, bunkName: bunkNames}, nil
+	return bunks, nil
 }
 
-// func meisaiIndex(dom string) (*sumAndBunk, error) {
-// 	readerCurContents := strings.NewReader(dom)
-// 	contentsDom, err := goquery.NewDocumentFromReader(readerCurContents)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+func details(dom string) ([]*Detail, error) {
+	readerCurContents := strings.NewReader(dom)
+	contentsDom, err := goquery.NewDocumentFromReader(readerCurContents)
+	if err != nil {
+		return nil, err
+	}
 
-// 	contentsDom.Find("ul.fr-dropdown-menu").First().click()
+	details := []*Detail{}
+	contentsDom.Find("tr.line").Each(func(i int, v *goquery.Selection) {
+		strP := v.Find("td.number").Eq(0).Text()
+		strW := v.Find("td.number").Eq(1).Text()
+		strB := v.Find("td.number").Eq(2).Text()
+		strP = strings.Replace(strP, ",", "", -1)
+		strW = strings.Replace(strW, ",", "", -1)
+		strB = strings.Replace(strB, ",", "", -1)
+		payment, _ := strconv.ParseInt(strP, 10, 64)
+		withdrawal, _ := strconv.ParseInt(strW, 10, 64)
+		balance, _ := strconv.ParseInt(strB, 10, 64)
 
-// }
+		id, _ := uuid.NewRandom()
+		details = append(details, &Detail{
+			Id:             id.String(),
+			BunkName:       v.Find("td.walletable-name").Text(),
+			TradingDate:    v.Find("td.date-cell").Eq(0).Text(),
+			TradingContent: v.Find("td.description").Text(),
+			Payment:        payment,
+			Withdrawal:     withdrawal,
+			Balance:        balance,
+			UpdatedDate:    v.Find("td.date-cell").Eq(1).Text(),
+			GettingDate:    v.Find("td.date-cell").Eq(2).Text(),
+		})
+
+	})
+
+	return details, nil
+}
