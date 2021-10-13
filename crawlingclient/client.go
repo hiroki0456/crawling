@@ -18,14 +18,31 @@ func main() {
 
 	c := pb.NewCrawlingServiceClient(cc)
 
-	doUnary(c)
-
+	// crawlingWrite(c)
+	crawlingRead(c)
+	// //
 }
 
-func doUnary(c pb.CrawlingServiceClient) {
+func crawlingRead(c pb.CrawlingServiceClient) {
+	req := &pb.FreeeRequest{
+		UserInput: &pb.UserInput{
+			UserId: "volleyball0456@gmail.com",
+		},
+		Pass:     "volleyball0456",
+		SiteKind: 1,
+	}
+
+	res, err := c.FreeeRead(context.Background(), req)
+	if err != nil {
+		log.Fatalf("error while calling Greet RPC: %v", err)
+	}
+	log.Println(res)
+}
+
+func crawlingWrite(c pb.CrawlingServiceClient) {
 	req := &pb.UserRequest{
 		UserInput: &pb.UserInput{
-			UserID: "volleyball0456@gmail.com",
+			UserId: "volleyball0456@gmail.com",
 		},
 		Pass:     "volleyball0456",
 		SiteKind: 1,
