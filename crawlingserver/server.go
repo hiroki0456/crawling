@@ -20,7 +20,13 @@ func (*server) UserHandler(ctx context.Context, req *pb.UserRequest) (*pb.UserRe
 	today := time.Now()
 	err := newC.Crawling(req.Pass, req.UserInput)
 	if err != nil {
-		return nil, err
+		return &pb.UserResponse{
+			IsSuccess:     false,
+			IllegalUrl:    false,
+			IllegalAccess: false,
+			IllegalLogin:  false,
+			IllegalGet:    false,
+		}, err
 	}
 
 	db := crawlingrepository.NewDatabase()

@@ -24,7 +24,8 @@ type CrawlingRead struct {
 
 type Date struct {
 	detailDate time.Time
-	submitDate time.Time
+	createdAt  time.Time
+	updatedAt  time.Time
 }
 
 var PbBanks *pb.Banks
@@ -50,9 +51,11 @@ func (c *CrawlingRead) OfficeRead(ctx context.Context, req *pb.FreeeRequest) (of
 			return nil, fmt.Errorf("銀行口座数と残高のクエリ取得に失敗しました: %s", err)
 		}
 		office := &pb.Office{}
-		if err := row.Columns(&office.OfficeName); err != nil {
+		date := &Date{}
+		if err := row.Columns(&office.OfficeName, &date.updatedAt); err != nil {
 			return nil, fmt.Errorf("銀行口座数と残高の取得に失敗しました: %s", err)
 		}
+		office.Crawling = timestamppb.New(date.updatedAt)
 
 		offices = append(offices, office)
 	}
@@ -131,11 +134,12 @@ func (c *CrawlingRead) detailRead(ctx context.Context, userId string, bankId str
 			return nil, fmt.Errorf("明細のクエリ取得に失敗しました: %s", err)
 		}
 
-		if err := row.Columns(&detail.DetailName, &detail.Contents, &detail.Amount, &date.detailDate, &date.submitDate); err != nil {
+		if err := row.Columns(&detail.DetailName, &detail.Contents, &detail.Amount, &detail.Balance, &date.detailDate, &date.createdAt, &date.updatedAt); err != nil {
 			return nil, fmt.Errorf("明細の取得に失敗しました: %s", err)
 		}
 		detail.DetailDate = timestamppb.New(date.detailDate)
-		detail.SubmitDate = timestamppb.New(date.submitDate)
+		detail.CreatedAt = timestamppb.New(date.createdAt)
+		detail.UpdatedAt = timestamppb.New(date.updatedAt)
 
 		details = append(details, detail)
 	}
@@ -181,7 +185,6 @@ func getBankSum(c *CrawlingRead, ctx context.Context, userId string, officeName 
 		if err != nil {
 			return fmt.Errorf("銀行口座残高のクエリ取得に失敗しました: %s", err)
 		}
-
 		if err := row.Columns(&PbBanks.BankSum); err != nil {
 			return fmt.Errorf("銀行口残高の取得に失敗しました: %s", err)
 		}
@@ -218,6 +221,7 @@ func getBankDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 		}
 		bank.Detail = details
 		bankList = append(bankList, bank)
+		PbBanks.DetailCount = int64(len(details))
 	}
 	PbBanks.Bank = bankList
 
@@ -300,6 +304,7 @@ func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 		card.Detail = details
 
 		cardList = append(cardList, card)
+		PbCards.DetailCount = int64(len(details))
 	}
 	PbCards.Card = cardList
 
