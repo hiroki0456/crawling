@@ -71,8 +71,9 @@ message UserResponse {
 message FreeeRequest {
     UserInput user_input = 1;
     string pass = 2;
-    int32 site_kind = 3;
-    string date = 4;
+    string start_day = 3;
+    string last_day = 4;
+    
 }
 
 message FreeeResponse {

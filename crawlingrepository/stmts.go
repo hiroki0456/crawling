@@ -2,6 +2,7 @@ package crawlingrepository
 
 import (
 	"strconv"
+	"time"
 
 	"cloud.google.com/go/spanner"
 )
@@ -85,7 +86,13 @@ func BankNameAndBankAmountStmt(bankCount int64, officeName string, userId string
 	return s
 }
 
-func DetailStmt(userId string, bankId string) spanner.Statement {
+func DetailStmt(userId string, bankId string, startDay string, lastDay string) spanner.Statement {
+	if startDay == "" {
+		startDay = time.Now().Format("2006-01-02")
+	}
+	if lastDay == "" {
+		lastDay = "2030-12-31"
+	}
 	s := spanner.Statement{
 		SQL: `SELECT
 					BankName,
@@ -98,10 +105,12 @@ func DetailStmt(userId string, bankId string) spanner.Statement {
 				FROM
 					details
 				WHERE
-					UserId = @UserId and bankId = @BankId`,
+					UserId = @UserId and bankId = @BankId and TradingDate >= @StartDay and TradingDate < @LastDay`,
 		Params: map[string]interface{}{
-			"UserId": userId,
-			"BankId": bankId,
+			"UserId":   userId,
+			"BankId":   bankId,
+			"Startday": startDay,
+			"LastDay":  lastDay,
 		},
 	}
 	return s

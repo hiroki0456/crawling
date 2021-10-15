@@ -18,18 +18,19 @@ func main() {
 
 	c := pb.NewCrawlingServiceClient(cc)
 
-	crawlingWrite(c)
-	// crawlingRead(c)
+	// crawlingWrite(c)
+	crawlingRead(c)
 	// //
 }
 
 func crawlingRead(c pb.CrawlingServiceClient) {
 	req := &pb.FreeeRequest{
 		UserInput: &pb.UserInput{
-			UserId: "volleyball0456@gmail.co",
+			UserId: "volleyball0456@gmail.com",
 		},
 		Pass:     "volleyball0456",
-		SiteKind: 1,
+		StartDay: "2021-10-16",
+		// LastDay: "2021-10-",
 	}
 
 	res, err := c.FreeeRead(context.Background(), req)

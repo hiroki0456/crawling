@@ -42,7 +42,7 @@ func (*server) UserHandler(ctx context.Context, req *pb.UserRequest) (*pb.UserRe
 		}, err
 	}
 
-	if err := db.DetailCreate(req.UserInput.UserId, crawlingrepository.Details); <-err != nil {
+	if err := db.DetailCreate(req.UserInput.UserId, crawlingrepository.Details, &today); <-err != nil {
 		err := <-err
 		return &pb.UserResponse{
 			IsSuccess: false,
@@ -65,12 +65,12 @@ func (*server) FreeeRead(ctx context.Context, req *pb.FreeeRequest) (*pb.FreeeRe
 	}
 
 	for _, office := range offices {
-		err := cr.BankRead(ctx, req, office.OfficeName)
+		err := cr.BankRead(ctx, req, office.OfficeName, req.StartDay, req.LastDay)
 		if err != nil {
 			return nil, err
 		}
 
-		err = cr.CardRead(ctx, req, office.OfficeName)
+		err = cr.CardRead(ctx, req, office.OfficeName, req.StartDay, req.LastDay)
 		if err != nil {
 			return nil, err
 		}

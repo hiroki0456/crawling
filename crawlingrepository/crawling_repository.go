@@ -60,6 +60,7 @@ type Detail struct {
 	Balance        int64     `spanner:"Balance"`
 	UpdatedDate    time.Time `spanner:"UpdatedDate"`
 	GettingDate    time.Time `spanner:"GettingDate"`
+	Crawling       time.Time `spanner:"Crawling"`
 }
 
 // スクレイピング済みの口座情報と明細情報
@@ -106,7 +107,9 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 		chromedp.SetValue(loginPassSel, pass, chromedp.BySearch).Do(ctx)
 		chromedp.Click(loginButtonSel).Do(ctx)
 		chromedp.Location(&illegalCheck).Do(ctx)
-		fmt.Println(illegalCheck)
+		if illegalCheck == "https://accounts.secure.freee.co.jp/login/accounting?a=false&e=0&o=false" {
+			return fmt.Errorf("ログインに失敗しました: %s", illegalCheck)
+		}
 		chromedp.WaitVisible(`.walletable_group___StyledDiv5-sc-1uncx9n-4.kQEfxP`, chromedp.ByQuery).Do(ctx)
 
 		return nil
@@ -127,6 +130,9 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 		}
 		bankNode := []*cdp.Node{}
 		chromedp.Nodes(`.walletable_group___StyledDiv-sc-1uncx9n-0.dHyIIm`, &bankNode, chromedp.ByQueryAll).Do(ctx)
+		if len(bankNode) == 0 {
+			return fmt.Errorf("銀行、並びにカード情報が取れませんでした。")
+		}
 
 		// var lastCommit string
 		// chromedp.Text(`.sync_all_walletables___StyledDiv2-tf1121-1`, &lastCommit, chromedp.ByQuery).Do(ctx)
@@ -258,12 +264,12 @@ func scrapingOfBanks(d string) error {
 		strAmount = strings.Replace(strAmount, ",", "", -1)
 		amount, err := strconv.ParseInt(strAmount, 10, 64)
 		if err != nil {
-			log.Printf("intへのconvertに失敗しました:　%v", err)
+			log.Fatalf("intへのconvertに失敗しました:　%v", err)
+			return
 		}
 
-		id := uuid.New()
 		Banks = append(Banks, &Bank{
-			Id:         id.String(),
+			Id:         uuid.NewString(),
 			OfficeName: officeName,
 			// lastCommit: lastCommit,
 			BankName: v.Find("a.walletable___StyledA-sc-3etvmj-3").Text(),
@@ -272,7 +278,7 @@ func scrapingOfBanks(d string) error {
 		})
 	})
 
-	return err
+	return nil
 }
 
 func scrapingDetailBankName(d string) (string, error) {
@@ -361,9 +367,8 @@ func scrapingDetails(dl []string, userId string) error {
 				}
 			}
 
-			id := uuid.New()
 			Details = append(Details, &Detail{
-				Id:             id.String(),
+				Id:             uuid.NewString(),
 				BankId:         bankId,
 				OfficeName:     officeName,
 				BankName:       v.Find("td.walletable-name").Text(),

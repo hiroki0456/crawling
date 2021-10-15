@@ -13,9 +13,9 @@ import (
 
 type CrawlingReadInterface interface {
 	OfficeRead(ctx context.Context, req *pb.FreeeRequest) (offices []*pb.Office, err error)
-	BankRead(ctx context.Context, req *pb.FreeeRequest, officeName string) (err error)
-	CardRead(ctx context.Context, req *pb.FreeeRequest, officeName string) (err error)
-	detailRead(ctx context.Context, userId string, bankId string) (details []*pb.Detail, err error)
+	BankRead(ctx context.Context, req *pb.FreeeRequest, officeName string, startDay string, lastDay string) (err error)
+	CardRead(ctx context.Context, req *pb.FreeeRequest, officeName string, startDay string, lastDay string) (err error)
+	detailRead(ctx context.Context, userId string, bankId string, startDay string, lastDay string) (details []*pb.Detail, err error)
 }
 
 type CrawlingRead struct {
@@ -63,7 +63,7 @@ func (c *CrawlingRead) OfficeRead(ctx context.Context, req *pb.FreeeRequest) (of
 	return offices, nil
 }
 
-func (c *CrawlingRead) BankRead(ctx context.Context, req *pb.FreeeRequest, officeName string) (err error) {
+func (c *CrawlingRead) BankRead(ctx context.Context, req *pb.FreeeRequest, officeName string, startDay string, lastDay string) (err error) {
 	PbBanks = &pb.Banks{}
 	err = getBankCount(c, ctx, req.UserInput.UserId, officeName)
 	if err != nil {
@@ -79,7 +79,7 @@ func (c *CrawlingRead) BankRead(ctx context.Context, req *pb.FreeeRequest, offic
 		return err
 	}
 
-	err = getBankDetails(c, ctx, req.UserInput.UserId, officeName)
+	err = getBankDetails(c, ctx, req.UserInput.UserId, officeName, startDay, lastDay)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (c *CrawlingRead) BankRead(ctx context.Context, req *pb.FreeeRequest, offic
 	return nil
 }
 
-func (c *CrawlingRead) CardRead(ctx context.Context, req *pb.FreeeRequest, officeName string) (err error) {
+func (c *CrawlingRead) CardRead(ctx context.Context, req *pb.FreeeRequest, officeName string, startDay string, lastDay string) (err error) {
 	PbCards = &pb.Cards{}
 
 	err = getCardCount(c, ctx, req.UserInput.UserId, officeName)
@@ -104,7 +104,7 @@ func (c *CrawlingRead) CardRead(ctx context.Context, req *pb.FreeeRequest, offic
 		return err
 	}
 
-	err = getCardDetails(c, ctx, req.UserInput.UserId, officeName)
+	err = getCardDetails(c, ctx, req.UserInput.UserId, officeName, startDay, lastDay)
 	if err != nil {
 		return err
 	}
@@ -112,13 +112,13 @@ func (c *CrawlingRead) CardRead(ctx context.Context, req *pb.FreeeRequest, offic
 	return nil
 }
 
-func (c *CrawlingRead) detailRead(ctx context.Context, userId string, bankId string) (details []*pb.Detail, err error) {
+func (c *CrawlingRead) detailRead(ctx context.Context, userId string, bankId string, startDay string, lastDay string) (details []*pb.Detail, err error) {
 	ro := c.client.ReadOnlyTransaction()
 	defer ro.Close()
 
 	details = []*pb.Detail{}
 
-	stmt := DetailStmt(userId, bankId)
+	stmt := DetailStmt(userId, bankId, startDay, lastDay)
 	iter := ro.Query(ctx, stmt)
 	defer iter.Stop()
 
@@ -192,7 +192,7 @@ func getBankSum(c *CrawlingRead, ctx context.Context, userId string, officeName 
 	return nil
 }
 
-func getBankDetails(c *CrawlingRead, ctx context.Context, userId string, officeName string) error {
+func getBankDetails(c *CrawlingRead, ctx context.Context, userId string, officeName string, startDay string, lastDay string) error {
 	ro := c.client.ReadOnlyTransaction()
 	defer ro.Close()
 	stmt := BankNameAndBankAmountStmt(PbBanks.BankCount, officeName, userId)
@@ -215,7 +215,7 @@ func getBankDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 			return fmt.Errorf("各銀行名と各銀行の残高の取得に失敗しました: %s", err)
 		}
 
-		details, err := c.detailRead(ctx, userId, bank.BankId)
+		details, err := c.detailRead(ctx, userId, bank.BankId, startDay, lastDay)
 		if err != nil {
 			return fmt.Errorf("%sの明細取得に失敗しました: %s", bank.BankName, err)
 		}
@@ -274,7 +274,7 @@ func getCardSum(c *CrawlingRead, ctx context.Context, userId string, officeName 
 	return nil
 }
 
-func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeName string) error {
+func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeName string, startDay string, lastDay string) error {
 	ro := c.client.ReadOnlyTransaction()
 	defer ro.Close()
 	stmt := CardInfoStmt(PbCards.CardCount, userId, officeName)
@@ -296,7 +296,7 @@ func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 			return fmt.Errorf("各クレジットカード名と各クレジットカードの残高の取得に失敗しました: %s", err)
 		}
 
-		details, err := c.detailRead(ctx, userId, card.CardId)
+		details, err := c.detailRead(ctx, userId, card.CardId, startDay, lastDay)
 		if err != nil {
 			return fmt.Errorf("%sの明細取得に失敗しました: %s", card.CardName, err)
 		}

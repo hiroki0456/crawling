@@ -2,7 +2,6 @@ package crawlingrepository
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -13,7 +12,7 @@ import (
 type DB interface {
 	UserCreate(users []*User, userId string, updatedAt *time.Time) error
 	BankCreate(userId string, banks []*Bank, today *time.Time) <-chan error
-	DetailCreate(userId string, details []*Detail) <-chan error
+	DetailCreate(userId string, details []*Detail, today *time.Time) <-chan error
 }
 
 type db struct {
@@ -63,8 +62,7 @@ func NewDatabase() DB {
 
 func (d *db) UserCreate(users []*User, userId string, updatedAt *time.Time) (err error) {
 	for _, v := range users {
-		id, _ := uuid.NewRandom()
-		v.Id = id.String()
+		v.Id = uuid.NewString()
 		v.UserId = userId
 		v.UpdatedAt = updatedAt
 		v.UserIdOfficeName = v.UserId + "_" + v.OfficeName
@@ -108,7 +106,6 @@ func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan e
 				}
 				_, err = d.Client.Apply(context.Background(), []*spanner.Mutation{m})
 				if err != nil {
-					fmt.Println(err)
 					errCh <- err
 				}
 			} else if v.Kind == "クレジットカード" {
@@ -128,7 +125,6 @@ func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan e
 				}
 				_, err = d.Client.Apply(context.Background(), []*spanner.Mutation{m})
 				if err != nil {
-					fmt.Println(err)
 					errCh <- err
 				}
 			} else {
@@ -148,7 +144,6 @@ func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan e
 				}
 				_, err = d.Client.Apply(context.Background(), []*spanner.Mutation{m})
 				if err != nil {
-					fmt.Println(err)
 					errCh <- err
 				}
 			}
@@ -164,7 +159,7 @@ func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan e
 	return errCh
 }
 
-func (d *db) DetailCreate(userId string, details []*Detail) <-chan error {
+func (d *db) DetailCreate(userId string, details []*Detail, today *time.Time) <-chan error {
 	errCh := make(chan error)
 	var wg sync.WaitGroup
 	wg.Add(len(details))
@@ -172,6 +167,7 @@ func (d *db) DetailCreate(userId string, details []*Detail) <-chan error {
 		go func(v *Detail) {
 			defer wg.Done()
 			v.UserId = userId
+			v.Crawling = *today
 			m, err := spanner.InsertStruct("Details", v)
 			if err != nil {
 				errCh <- err
