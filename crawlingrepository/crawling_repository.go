@@ -40,6 +40,7 @@ type Bank struct {
 	Id         string `spanner:"Id"`
 	UserId     string `spanner:"UserId"`
 	BankId     string `spanner:"BankId"`
+	lastCommit string `spanner:"LastCommit"`
 	OfficeName string `spanner:"OfficeName"`
 	BankName   string `spanner:"BankName"`
 	Amount     int64  `spanner:"Amount"`
@@ -79,10 +80,14 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 	)
 	defer cancel()
 
+	ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
 	loginURL := "https://accounts.secure.freee.co.jp/login/accounting"
 	officeURL := "https://secure.freee.co.jp/user/show_companies"
 	detailURL := "https://secure.freee.co.jp/wallet_txns"
 	topURL := "https://secure.freee.co.jp/"
+	illegalCheck := ""
 
 	loginIdSel := `/html/body/div[3]/div/div[1]/form/div/div[2]/input`
 	loginPassSel := `/html/body/div[3]/div/div[1]/form/div/div[3]/input`
@@ -90,12 +95,18 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 
 	loginActionFunc := chromedp.ActionFunc(func(ctx context.Context) error {
 		chromedp.Navigate(loginURL).Do(ctx)
+		chromedp.Location(&illegalCheck).Do(ctx)
+		if illegalCheck == "chrome-error://chromewebdata/" {
+			return fmt.Errorf("URLの遷移に失敗しました: %s", illegalCheck)
+		}
 
 		chromedp.ScrollIntoView(`body`).Do(ctx)
 
 		chromedp.SetValue(loginIdSel, input.UserId, chromedp.BySearch).Do(ctx)
 		chromedp.SetValue(loginPassSel, pass, chromedp.BySearch).Do(ctx)
 		chromedp.Click(loginButtonSel).Do(ctx)
+		chromedp.Location(&illegalCheck).Do(ctx)
+		fmt.Println(illegalCheck)
 		chromedp.WaitVisible(`.walletable_group___StyledDiv5-sc-1uncx9n-4.kQEfxP`, chromedp.ByQuery).Do(ctx)
 
 		return nil
@@ -103,6 +114,10 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 
 	getBanksActionFunc := chromedp.ActionFunc(func(ctx context.Context) error {
 		chromedp.Navigate(topURL).Do(ctx)
+		chromedp.Location(&illegalCheck).Do(ctx)
+		if illegalCheck == "chrome-error://chromewebdata/" {
+			return fmt.Errorf("URLの遷移に失敗しました: %s", illegalCheck)
+		}
 		chromedp.WaitVisible(`.walletable_controls___StyledSpan-sc-11p3ona-0`, chromedp.ByQuery).Do(ctx)
 		lastCommitNodes := []*cdp.Node{}
 		chromedp.Nodes(`.walletable_controls___StyledSpan-sc-11p3ona-0`, &lastCommitNodes, chromedp.ByQueryAll).Do(ctx)
@@ -113,6 +128,8 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 		bankNode := []*cdp.Node{}
 		chromedp.Nodes(`.walletable_group___StyledDiv-sc-1uncx9n-0.dHyIIm`, &bankNode, chromedp.ByQueryAll).Do(ctx)
 
+		// var lastCommit string
+		// chromedp.Text(`.sync_all_walletables___StyledDiv2-tf1121-1`, &lastCommit, chromedp.ByQuery).Do(ctx)
 		var wg sync.WaitGroup
 		wg.Add(len(bankNode))
 		for _, n := range bankNode {
@@ -130,6 +147,10 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 
 	getDetailActionFunc := chromedp.ActionFunc(func(ctx context.Context) error {
 		chromedp.Navigate(detailURL).Do(ctx)
+		chromedp.Location(&illegalCheck).Do(ctx)
+		if illegalCheck == "chrome-error://chromewebdata/" {
+			return fmt.Errorf("URLの遷移に失敗しました: %s", illegalCheck)
+		}
 		chromedp.ScrollIntoView(`#footer`, chromedp.ByQuery).Do(ctx)
 		detailBankNode := []*cdp.Node{}
 		chromedp.Nodes(`select#walletable > option`, &detailBankNode, chromedp.ByQueryAll).Do(ctx)
@@ -177,6 +198,10 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 
 	crawlingActionFunc := chromedp.ActionFunc(func(ctx context.Context) error {
 		chromedp.Navigate(officeURL).Do(ctx)
+		chromedp.Location(&illegalCheck).Do(ctx)
+		if illegalCheck == "chrome-error://chromewebdata/" {
+			return fmt.Errorf("URLの遷移に失敗しました: %s", illegalCheck)
+		}
 		chromedp.WaitVisible(`#footer`).Do(ctx)
 		officeNode := []*cdp.Node{}
 		chromedp.Nodes(`table.list-table > tbody > tr`, &officeNode, chromedp.ByQueryAll).Do(ctx)
@@ -212,7 +237,7 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 		crawlingActionFunc,
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	return nil
@@ -226,6 +251,8 @@ func scrapingOfBanks(d string) error {
 		return err
 	}
 
+	// lastCommit = strings.Replace(lastCommit, "最終同期日", "", -1)
+
 	contentsDom.Find(`div.walletable___StyledDiv-sc-3etvmj-0`).Each(func(i int, v *goquery.Selection) {
 		strAmount := v.Find("div.walletable___StyledDiv8-sc-3etvmj-8").Text()
 		strAmount = strings.Replace(strAmount, ",", "", -1)
@@ -238,9 +265,10 @@ func scrapingOfBanks(d string) error {
 		Banks = append(Banks, &Bank{
 			Id:         id.String(),
 			OfficeName: officeName,
-			BankName:   v.Find("a.walletable___StyledA-sc-3etvmj-3").Text(),
-			Amount:     amount,
-			Kind:       v.Parent().Parent().Find("h2.vb-sectionTitle").Text(),
+			// lastCommit: lastCommit,
+			BankName: v.Find("a.walletable___StyledA-sc-3etvmj-3").Text(),
+			Amount:   amount,
+			Kind:     v.Parent().Parent().Find("h2.vb-sectionTitle").Text(),
 		})
 	})
 

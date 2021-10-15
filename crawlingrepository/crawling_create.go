@@ -24,6 +24,7 @@ type CreateBank struct {
 	Id         string     `spanner:"Id"`
 	UserId     string     `spanner:"UserId"`
 	BankId     string     `spanner:"BankId"`
+	lastCommit string     `spanner:"LastCommit"`
 	OfficeName string     `spanner:"OfficeName"`
 	BankName   string     `spanner:"BankName"`
 	Amount     int64      `spanner:"Amount"`
@@ -34,6 +35,7 @@ type CreateCard struct {
 	Id         string     `spanner:"Id"`
 	UserId     string     `spanner:"UserId"`
 	CardId     string     `spanner:"CardId"`
+	lastCommit string     `spanner:"LastCommit"`
 	OfficeName string     `spanner:"OfficeName"`
 	CardName   string     `spanner:"CardName"`
 	Amount     int64      `spanner:"Amount"`
@@ -44,6 +46,7 @@ type Other struct {
 	Id         string     `spanner:"Id"`
 	UserId     string     `spanner:"UserId"`
 	OtherId    string     `spanner:"OtherId"`
+	lastCommit string     `spanner:"LastCommit"`
 	OfficeName string     `spanner:"OfficeName"`
 	OtherName  string     `spanner:"OtherName"`
 	Amount     int64      `spanner:"Amount"`
@@ -94,6 +97,7 @@ func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan e
 					Id:         v.Id,
 					UserId:     v.UserId,
 					BankId:     v.BankId,
+					lastCommit: v.lastCommit,
 					OfficeName: v.OfficeName,
 					BankName:   v.BankName,
 					Amount:     v.Amount,
@@ -113,6 +117,7 @@ func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan e
 					Id:         v.Id,
 					UserId:     v.UserId,
 					CardId:     v.BankId,
+					lastCommit: v.lastCommit,
 					OfficeName: v.OfficeName,
 					CardName:   v.BankName,
 					Amount:     v.Amount,
@@ -132,6 +137,7 @@ func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan e
 					Id:         v.Id,
 					UserId:     v.UserId,
 					OtherId:    v.BankId,
+					lastCommit: v.lastCommit,
 					OfficeName: v.OfficeName,
 					OtherName:  v.BankName,
 					Amount:     v.Amount,
@@ -162,7 +168,6 @@ func (d *db) DetailCreate(userId string, details []*Detail) <-chan error {
 	errCh := make(chan error)
 	var wg sync.WaitGroup
 	wg.Add(len(details))
-	fmt.Println(len(details))
 	for _, v := range details {
 		go func(v *Detail) {
 			defer wg.Done()

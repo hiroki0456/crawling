@@ -11,13 +11,14 @@ message UserInput {
 
 message Office {
     string office_name = 1;
-    Banks banks = 2;
-    Cards cards = 3;
+    google.protobuf.Timestamp crawling = 2;
+    Banks banks = 3;
+    Cards cards = 4;
 }
 
 message Bank {
-    string bank_name = 1;
-    string bank_id = 2;
+    string bank_id = 1;
+    string bank_name = 2;
     int64 bank_amount = 3;
     repeated Detail detail = 4;
 }
@@ -25,12 +26,13 @@ message Bank {
 message Banks {
     int64 bank_sum = 1;
     int64 bank_count = 2;
-    repeated Bank bank = 3;
+    int64 detail_count = 3;
+    repeated Bank bank = 4;
 }
 
 message Card {
-    string card_name = 1;
-    string card_id = 2;
+    string card_id = 1;
+    string card_name = 2;
     int64 card_amount = 3;
     repeated Detail detail = 4;
 }
@@ -38,15 +40,18 @@ message Card {
 message Cards {
     int64 card_sum = 1;
     int64 card_count = 2;
-    repeated Card card = 3;
+    int64 detail_count = 3;
+    repeated Card card = 4;
 }
 
 message Detail {
     string detail_name = 1;
     string contents = 2;
     int64 amount = 3;
-    google.protobuf.Timestamp detail_date = 4;
-    google.protobuf.Timestamp submit_date = 5;
+    int64 balance = 4;
+    google.protobuf.Timestamp detail_date = 5;
+    google.protobuf.Timestamp created_at = 6;
+    google.protobuf.Timestamp updated_at = 7;
 }
 
 message UserRequest {
@@ -57,6 +62,10 @@ message UserRequest {
 
 message UserResponse {
     bool is_success = 1;
+    bool illegal_url = 2;
+    bool illegal_login = 3;
+    bool illegal_access = 4;
+    bool illegal_get = 5;
 }
 
 message FreeeRequest {

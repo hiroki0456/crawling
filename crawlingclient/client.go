@@ -18,15 +18,15 @@ func main() {
 
 	c := pb.NewCrawlingServiceClient(cc)
 
-	// crawlingWrite(c)
-	crawlingRead(c)
+	crawlingWrite(c)
+	// crawlingRead(c)
 	// //
 }
 
 func crawlingRead(c pb.CrawlingServiceClient) {
 	req := &pb.FreeeRequest{
 		UserInput: &pb.UserInput{
-			UserId: "volleyball0456@gmail.com",
+			UserId: "volleyball0456@gmail.co",
 		},
 		Pass:     "volleyball0456",
 		SiteKind: 1,

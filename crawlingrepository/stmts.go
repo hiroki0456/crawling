@@ -9,13 +9,12 @@ import (
 func OfficeReadStmt(userId string) spanner.Statement {
 	s := spanner.Statement{
 		SQL: `SELECT
-					OfficeName 
+					OfficeName, updatedAt
 				FROM
-					Banks
+					Users
 				WHERE
 					UserId = @UserId
-				GROUP BY
-					OfficeName`,
+					`,
 		Params: map[string]interface{}{
 			"UserId": userId,
 		},
@@ -92,8 +91,10 @@ func DetailStmt(userId string, bankId string) spanner.Statement {
 					BankName,
 					TradingContent,
 					(Payment + Withdrawal) as Payment,
+					Balance,
+					TradingDate,
+					GettingDate,
 					UpdatedDate,
-					GettingDate
 				FROM
 					details
 				WHERE
