@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"log"
 	"net"
 	"time"
 
-	"cloud.google.com/go/spanner"
 	"google.golang.org/grpc"
 	pb "upsider.crawling/crawlingproto"
 	"upsider.crawling/crawlingrepository"
@@ -18,6 +19,7 @@ func (*server) UserHandler(ctx context.Context, req *pb.UserRequest) (*pb.UserRe
 
 	newC := crawlingrepository.NewCrawling()
 	today := time.Now()
+
 	err := newC.Crawling(req.Pass, req.UserInput)
 	if err != nil {
 		return &pb.UserResponse{
@@ -30,7 +32,7 @@ func (*server) UserHandler(ctx context.Context, req *pb.UserRequest) (*pb.UserRe
 	}
 
 	db := crawlingrepository.NewDatabase()
-	if err = db.UserCreate(crawlingrepository.Users, req.UserInput.UserId, &today); err != nil {
+	if err := db.UserCreate(crawlingrepository.Users, req.UserInput.UserId, &today); err != nil {
 		return &pb.UserResponse{
 			IsSuccess: false,
 		}, err
@@ -55,7 +57,10 @@ func (*server) UserHandler(ctx context.Context, req *pb.UserRequest) (*pb.UserRe
 }
 
 func (*server) FreeeRead(ctx context.Context, req *pb.FreeeRequest) (*pb.FreeeResponse, error) {
-	client, _ := spanner.NewClient(ctx, "projects/test-project/instances/test-instance/databases/test-database")
+	client, err := sql.Open("mysql", "root@/freee?parseTime=true&loc=Asia%2FTokyo")
+	if err != nil {
+		log.Fatal(err)
+	}
 	cr := crawlingrepository.NewCrawlingRead(client)
 	// 銀行口座取得
 
@@ -77,6 +82,8 @@ func (*server) FreeeRead(ctx context.Context, req *pb.FreeeRequest) (*pb.FreeeRe
 		office.Banks = crawlingrepository.PbBanks
 		office.Cards = crawlingrepository.PbCards
 	}
+
+	fmt.Println(len(offices[0].Cards.Card[1].Detail))
 
 	return &pb.FreeeResponse{
 		Office: offices,

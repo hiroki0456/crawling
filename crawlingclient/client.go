@@ -28,16 +28,21 @@ func crawlingRead(c pb.CrawlingServiceClient) {
 		UserInput: &pb.UserInput{
 			UserId: "volleyball0456@gmail.com",
 		},
-		Pass:     "volleyball0456",
-		StartDay: "2021-10-16",
-		// LastDay: "2021-10-",
+		Pass: "volleyball0456",
+		// StartDay: "2021-10-14",
+		// LastDay: "2021-10-18",
 	}
 
 	res, err := c.FreeeRead(context.Background(), req)
 	if err != nil {
 		log.Fatalf("error while calling Greet RPC: %v", err)
 	}
-	log.Println(res)
+	log.Println(res.Office[0])
+	log.Println(res.Office[1])
+	// log.Println(res.Office[1])
+	// log.Println(res.Office[0].Banks.Bank[1].Detail)
+	// log.Println(res.Office[1].Banks.Bank[0].Detail)
+
 }
 
 func crawlingWrite(c pb.CrawlingServiceClient) {
@@ -45,7 +50,7 @@ func crawlingWrite(c pb.CrawlingServiceClient) {
 		UserInput: &pb.UserInput{
 			UserId: "volleyball0456@gmail.com",
 		},
-		Pass:     "volleyball0456",
+		Pass:     "hiro0456",
 		SiteKind: 1,
 	}
 

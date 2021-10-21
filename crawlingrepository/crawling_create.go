@@ -1,12 +1,12 @@
 package crawlingrepository
 
 import (
-	"context"
+	"database/sql"
+	"log"
 	"sync"
 	"time"
 
-	"cloud.google.com/go/spanner"
-	"github.com/google/uuid"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type DB interface {
@@ -16,45 +16,14 @@ type DB interface {
 }
 
 type db struct {
-	Client *spanner.Client
-}
-
-type CreateBank struct {
-	Id         string     `spanner:"Id"`
-	UserId     string     `spanner:"UserId"`
-	BankId     string     `spanner:"BankId"`
-	lastCommit string     `spanner:"LastCommit"`
-	OfficeName string     `spanner:"OfficeName"`
-	BankName   string     `spanner:"BankName"`
-	Amount     int64      `spanner:"Amount"`
-	UpdatedAt  *time.Time `spanner:"updatedAt"`
-}
-
-type CreateCard struct {
-	Id         string     `spanner:"Id"`
-	UserId     string     `spanner:"UserId"`
-	CardId     string     `spanner:"CardId"`
-	lastCommit string     `spanner:"LastCommit"`
-	OfficeName string     `spanner:"OfficeName"`
-	CardName   string     `spanner:"CardName"`
-	Amount     int64      `spanner:"Amount"`
-	UpdatedAt  *time.Time `spanner:"updatedAt"`
-}
-
-type Other struct {
-	Id         string     `spanner:"Id"`
-	UserId     string     `spanner:"UserId"`
-	OtherId    string     `spanner:"OtherId"`
-	lastCommit string     `spanner:"LastCommit"`
-	OfficeName string     `spanner:"OfficeName"`
-	OtherName  string     `spanner:"OtherName"`
-	Amount     int64      `spanner:"Amount"`
-	UpdatedAt  *time.Time `spanner:"updatedAt"`
+	Client *sql.DB
 }
 
 func NewDatabase() DB {
-	ctx := context.Background()
-	client, _ := spanner.NewClient(ctx, "projects/test-project/instances/test-instance/databases/test-database")
+	client, err := sql.Open("mysql", "root@/freee")
+	if err != nil {
+		log.Fatal(err)
+	}
 	return &db{
 		Client: client,
 	}
@@ -62,22 +31,36 @@ func NewDatabase() DB {
 
 func (d *db) UserCreate(users []*User, userId string, updatedAt *time.Time) (err error) {
 	for _, v := range users {
-		v.Id = uuid.NewString()
-		v.UserId = userId
-		v.UpdatedAt = updatedAt
 		v.UserIdOfficeName = v.UserId + "_" + v.OfficeName
 
-		m, err := spanner.InsertOrUpdateStruct("Users", v)
+		updateStmt, err := d.Client.Prepare("UPDATE Users set userIdOfficeName = ?,userId = ?,officeName = ?,lastId = ?,updatedAt = ? where officeName = ?")
 		if err != nil {
 			return err
 		}
-		_, err = d.Client.Apply(context.Background(), []*spanner.Mutation{m})
+		result, err := updateStmt.Exec(v.UserIdOfficeName, userId, v.OfficeName, v.LastId, updatedAt, v.OfficeName)
 		if err != nil {
 			return err
 		}
+
+		rowsAffect, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+
+		if rowsAffect == 0 {
+			insertStmt, err := d.Client.Prepare("INSERT INTO Users(userIdOfficeName,userId,officeName,lastId,updatedAt) VALUES(?, ?, ?, ?, ?)")
+			if err != nil {
+				return err
+			}
+			_, err = insertStmt.Exec(v.UserIdOfficeName, v.UserId, v.OfficeName, v.LastId, updatedAt)
+			if err != nil {
+				return err
+			}
+		}
+
 	}
 
-	return err
+	return nil
 }
 
 func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan error {
@@ -87,67 +70,36 @@ func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan e
 	for _, v := range banks {
 		go func(v *Bank) {
 			defer wg.Done()
-
 			if v.Kind == "銀行口座" {
 
-				v.UserId = userId
-				m, err := spanner.InsertStruct("Banks", &CreateBank{
-					Id:         v.Id,
-					UserId:     v.UserId,
-					BankId:     v.BankId,
-					lastCommit: v.lastCommit,
-					OfficeName: v.OfficeName,
-					BankName:   v.BankName,
-					Amount:     v.Amount,
-					UpdatedAt:  today,
-				})
+				insertStmt, err := d.Client.Prepare("INSERT INTO Banks(userId,bankId,LastCommitDate,officeName,bankName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
 				if err != nil {
 					errCh <- err
 				}
-				_, err = d.Client.Apply(context.Background(), []*spanner.Mutation{m})
+				_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
 				if err != nil {
 					errCh <- err
 				}
+
 			} else if v.Kind == "クレジットカード" {
-				v.UserId = userId
-				m, err := spanner.InsertStruct("Cards", &CreateCard{
-					Id:         v.Id,
-					UserId:     v.UserId,
-					CardId:     v.BankId,
-					lastCommit: v.lastCommit,
-					OfficeName: v.OfficeName,
-					CardName:   v.BankName,
-					Amount:     v.Amount,
-					UpdatedAt:  today,
-				})
+				insertStmt, err := d.Client.Prepare("INSERT INTO Cards(userId,cardId,LastCommitDate,officeName,cardName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
 				if err != nil {
 					errCh <- err
 				}
-				_, err = d.Client.Apply(context.Background(), []*spanner.Mutation{m})
+				_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
 				if err != nil {
 					errCh <- err
 				}
 			} else {
-				v.UserId = userId
-				m, err := spanner.InsertStruct("Others", &Other{
-					Id:         v.Id,
-					UserId:     v.UserId,
-					OtherId:    v.BankId,
-					lastCommit: v.lastCommit,
-					OfficeName: v.OfficeName,
-					OtherName:  v.BankName,
-					Amount:     v.Amount,
-					UpdatedAt:  today,
-				})
+				insertStmt, err := d.Client.Prepare("INSERT INTO Others(userId,otherId,LastCommitDate,officeName,otherName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
 				if err != nil {
 					errCh <- err
 				}
-				_, err = d.Client.Apply(context.Background(), []*spanner.Mutation{m})
+				_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
 				if err != nil {
 					errCh <- err
 				}
 			}
-
 		}(v)
 	}
 
@@ -161,25 +113,19 @@ func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan e
 
 func (d *db) DetailCreate(userId string, details []*Detail, today *time.Time) <-chan error {
 	errCh := make(chan error)
-	var wg sync.WaitGroup
-	wg.Add(len(details))
+
 	for _, v := range details {
-		go func(v *Detail) {
-			defer wg.Done()
-			v.UserId = userId
-			v.Crawling = *today
-			m, err := spanner.InsertStruct("Details", v)
-			if err != nil {
-				errCh <- err
-			}
-			_, err = d.Client.Apply(context.Background(), []*spanner.Mutation{m})
-			if err != nil {
-				errCh <- err
-			}
-		}(v)
+		insertStmt, err := d.Client.Prepare("INSERT INTO Details(userId, bankId, officeName, bankName, tradingDate, tradingContent, payment, withdrawal, balance, UpdatedDate, GettingDate, crawling) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		if err != nil {
+			errCh <- err
+		}
+		_, err = insertStmt.Exec(userId, v.BankId, v.OfficeName, v.BankName, v.TradingDate, v.TradingContent, v.Payment, v.Withdrawal, v.Balance, v.UpdatedDate, v.GettingDate, today)
+		if err != nil {
+			errCh <- err
+		}
 	}
 	go func() {
-		wg.Wait()
+		// wg.Wait()
 		close(errCh)
 	}()
 	return errCh

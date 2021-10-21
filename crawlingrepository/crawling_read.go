@@ -2,11 +2,10 @@ package crawlingrepository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
-	"cloud.google.com/go/spanner"
-	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	pb "upsider.crawling/crawlingproto"
 )
@@ -15,11 +14,11 @@ type CrawlingReadInterface interface {
 	OfficeRead(ctx context.Context, req *pb.FreeeRequest) (offices []*pb.Office, err error)
 	BankRead(ctx context.Context, req *pb.FreeeRequest, officeName string, startDay string, lastDay string) (err error)
 	CardRead(ctx context.Context, req *pb.FreeeRequest, officeName string, startDay string, lastDay string) (err error)
-	detailRead(ctx context.Context, userId string, bankId string, startDay string, lastDay string) (details []*pb.Detail, err error)
+	detailRead(ctx context.Context, userId string, bankId string, officeName string, startDay string, lastDay string) (details []*pb.Detail, err error)
 }
 
 type CrawlingRead struct {
-	client *spanner.Client
+	client *sql.DB
 }
 
 type Date struct {
@@ -31,33 +30,32 @@ type Date struct {
 var PbBanks *pb.Banks
 var PbCards *pb.Cards
 
-func NewCrawlingRead(db *spanner.Client) CrawlingReadInterface {
+func NewCrawlingRead(db *sql.DB) CrawlingReadInterface {
 	return &CrawlingRead{db}
 }
 
 func (c *CrawlingRead) OfficeRead(ctx context.Context, req *pb.FreeeRequest) (offices []*pb.Office, err error) {
-	ro := c.client.ReadOnlyTransaction()
-	defer ro.Close()
-	stmt := OfficeReadStmt(req.UserInput.UserId)
-	iter := ro.Query(ctx, stmt)
-	defer iter.Stop()
+	rows, err := c.client.Query(OfficeReadStmt(), req.UserInput.UserId)
+	if err != nil {
+		return nil, fmt.Errorf("事業所名のクエリ取得に失敗しました: %s", err)
+	}
+	defer rows.Close()
 
-	for {
-		row, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("銀行口座数と残高のクエリ取得に失敗しました: %s", err)
-		}
+	for rows.Next() {
 		office := &pb.Office{}
 		date := &Date{}
-		if err := row.Columns(&office.OfficeName, &date.updatedAt); err != nil {
-			return nil, fmt.Errorf("銀行口座数と残高の取得に失敗しました: %s", err)
+		err := rows.Scan(&office.OfficeName, &date.updatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("事業所名の取得に失敗しました: %s", err)
 		}
 		office.Crawling = timestamppb.New(date.updatedAt)
 
 		offices = append(offices, office)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		panic(err.Error())
 	}
 
 	return offices, nil
@@ -112,29 +110,18 @@ func (c *CrawlingRead) CardRead(ctx context.Context, req *pb.FreeeRequest, offic
 	return nil
 }
 
-func (c *CrawlingRead) detailRead(ctx context.Context, userId string, bankId string, startDay string, lastDay string) (details []*pb.Detail, err error) {
-	ro := c.client.ReadOnlyTransaction()
-	defer ro.Close()
-
+func (c *CrawlingRead) detailRead(ctx context.Context, userId string, bankId string, officeName string, startDay string, lastDay string) (details []*pb.Detail, err error) {
+	rows, err := c.client.Query(DetailStmt(startDay, lastDay), userId, bankId, officeName)
+	if err != nil {
+		return nil, fmt.Errorf("明細のクエリ取得に失敗しました: %s", err)
+	}
 	details = []*pb.Detail{}
 
-	stmt := DetailStmt(userId, bankId, startDay, lastDay)
-	iter := ro.Query(ctx, stmt)
-	defer iter.Stop()
-
-	for {
+	for rows.Next() {
 		detail := &pb.Detail{}
 		date := &Date{}
-		row, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
 
-		if err != nil {
-			return nil, fmt.Errorf("明細のクエリ取得に失敗しました: %s", err)
-		}
-
-		if err := row.Columns(&detail.DetailName, &detail.Contents, &detail.Amount, &detail.Balance, &date.detailDate, &date.createdAt, &date.updatedAt); err != nil {
+		if err := rows.Scan(&detail.DetailName, &detail.Contents, &detail.Amount, &detail.Balance, &date.detailDate, &date.createdAt, &date.updatedAt); err != nil {
 			return nil, fmt.Errorf("明細の取得に失敗しました: %s", err)
 		}
 		detail.DetailDate = timestamppb.New(date.detailDate)
@@ -148,80 +135,67 @@ func (c *CrawlingRead) detailRead(ctx context.Context, userId string, bankId str
 }
 
 func getBankCount(c *CrawlingRead, ctx context.Context, userId string, officeName string) error {
-	ro := c.client.ReadOnlyTransaction()
-	defer ro.Close()
-	stmt := DistinctBankNameCountStmt(userId, officeName)
-	iter := ro.Query(ctx, stmt)
-	defer iter.Stop()
+	rows, err := c.client.Query(DistinctBankNameCountStmt(), userId, officeName)
+	if err != nil {
+		return fmt.Errorf("銀行口座数のクエリ取得に失敗しました: %s", err)
+	}
 
-	for {
-		row, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
+	for rows.Next() {
+		err := rows.Scan(&PbBanks.BankCount)
 		if err != nil {
-			return fmt.Errorf("銀行口座数のクエリ取得に失敗しました: %s", err)
-		}
-
-		if err := row.Columns(&PbBanks.BankCount); err != nil {
 			return fmt.Errorf("銀行口座数の取得に失敗しました: %s", err)
 		}
 	}
+
+	err = rows.Err()
+	if err != nil {
+		panic(err.Error())
+	}
+
 	return nil
 }
 
 func getBankSum(c *CrawlingRead, ctx context.Context, userId string, officeName string) error {
-	ro := c.client.ReadOnlyTransaction()
-	defer ro.Close()
-	stmt := SumAmountOnBanksStmt(PbBanks.BankCount, officeName, userId)
-	iter := ro.Query(ctx, stmt)
-	defer iter.Stop()
+	rows, err := c.client.Query(SumAmountOnBanksStmt(PbBanks.BankCount), userId, officeName)
+	if err != nil {
+		return fmt.Errorf("銀行口座残高のクエリ取得に失敗しました: %s", err)
+	}
 
-	for {
-		row, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
+	for rows.Next() {
+		err := rows.Scan(&PbBanks.BankSum)
 		if err != nil {
-			return fmt.Errorf("銀行口座残高のクエリ取得に失敗しました: %s", err)
-		}
-		if err := row.Columns(&PbBanks.BankSum); err != nil {
 			return fmt.Errorf("銀行口残高の取得に失敗しました: %s", err)
 		}
 	}
+
+	err = rows.Err()
+	if err != nil {
+		panic(err.Error())
+	}
+
 	return nil
 }
 
 func getBankDetails(c *CrawlingRead, ctx context.Context, userId string, officeName string, startDay string, lastDay string) error {
-	ro := c.client.ReadOnlyTransaction()
-	defer ro.Close()
-	stmt := BankNameAndBankAmountStmt(PbBanks.BankCount, officeName, userId)
-	iter := ro.Query(ctx, stmt)
-	defer iter.Stop()
-
+	rows, err := c.client.Query(BankNameAndBankAmountStmt(PbBanks.BankCount), userId, officeName)
+	if err != nil {
+		return fmt.Errorf("各銀行名と各銀行の残高のクエリ取得に失敗しました: %s", err)
+	}
 	bankList := []*pb.Bank{}
 
-	for {
+	for rows.Next() {
 		bank := &pb.Bank{}
-		row, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("各銀行名と各銀行の残高のクエリ取得に失敗しました: %s", err)
-		}
-
-		if err := row.Columns(&bank.BankId, &bank.BankName, &bank.BankAmount); err != nil {
+		if err := rows.Scan(&bank.BankId, &bank.BankName, &bank.BankAmount); err != nil {
 			return fmt.Errorf("各銀行名と各銀行の残高の取得に失敗しました: %s", err)
 		}
 
-		details, err := c.detailRead(ctx, userId, bank.BankId, startDay, lastDay)
+		details, err := c.detailRead(ctx, userId, bank.BankId, officeName, startDay, lastDay)
 		if err != nil {
 			return fmt.Errorf("%sの明細取得に失敗しました: %s", bank.BankName, err)
 		}
 		bank.Detail = details
+		bank.DetailCount = int64(len(details))
 		bankList = append(bankList, bank)
-		PbBanks.DetailCount = int64(len(details))
 	}
 	PbBanks.Bank = bankList
 
@@ -229,22 +203,13 @@ func getBankDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 }
 
 func getCardCount(c *CrawlingRead, ctx context.Context, userId string, officeName string) error {
-	ro := c.client.ReadOnlyTransaction()
-	defer ro.Close()
-	stmt := CardCountStmt(userId, officeName)
-	iter := ro.Query(ctx, stmt)
-	defer iter.Stop()
+	rows, err := c.client.Query(CardCountStmt(), userId, officeName)
+	if err != nil {
+		return fmt.Errorf("クレジットカード数のクエリ取得に失敗しました: %s", err)
+	}
 
-	for {
-		row, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("クレジットカード数のクエリ取得に失敗しました: %s", err)
-		}
-
-		if err := row.Columns(&PbCards.CardCount); err != nil {
+	for rows.Next() {
+		if err := rows.Scan(&PbCards.CardCount); err != nil {
 			return fmt.Errorf("クレジットカード数の取得に失敗しました: %s", err)
 		}
 	}
@@ -252,22 +217,13 @@ func getCardCount(c *CrawlingRead, ctx context.Context, userId string, officeNam
 }
 
 func getCardSum(c *CrawlingRead, ctx context.Context, userId string, officeName string) error {
-	ro := c.client.ReadOnlyTransaction()
-	defer ro.Close()
-	stmt := CardSumStmt(PbCards.CardCount, userId, officeName)
-	iter := ro.Query(ctx, stmt)
-	defer iter.Stop()
+	rows, err := c.client.Query(CardSumStmt(PbCards.CardCount), userId, officeName)
+	if err != nil {
+		return fmt.Errorf("クレジットカード残高のクエリ取得に失敗しました: %s", err)
+	}
 
-	for {
-		row, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("クレジットカード残高のクエリ取得に失敗しました: %s", err)
-		}
-
-		if err := row.Columns(&PbCards.CardSum); err != nil {
+	for rows.Next() {
+		if err := rows.Scan(&PbCards.CardSum); err != nil {
 			return fmt.Errorf("クレジットカード残高の取得に失敗しました: %s", err)
 		}
 	}
@@ -275,36 +231,29 @@ func getCardSum(c *CrawlingRead, ctx context.Context, userId string, officeName 
 }
 
 func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeName string, startDay string, lastDay string) error {
-	ro := c.client.ReadOnlyTransaction()
-	defer ro.Close()
-	stmt := CardInfoStmt(PbCards.CardCount, userId, officeName)
-	iter := ro.Query(ctx, stmt)
-	defer iter.Stop()
+	rows, err := c.client.Query(CardInfoStmt(PbCards.CardCount), userId, officeName)
+	if err != nil {
+		return fmt.Errorf("各クレジットカード名と各クレジットカード残高のクエリ取得に失敗しました: %s", err)
+	}
 
 	cardList := []*pb.Card{}
 
-	for {
+	for rows.Next() {
 		card := &pb.Card{}
-		row, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("各クレジットカード名と各クレジットカード残高のクエリ取得に失敗しました: %s", err)
-		}
-		if err := row.Columns(&card.CardId, &card.CardName, &card.CardAmount); err != nil {
+
+		if err := rows.Scan(&card.CardId, &card.CardName, &card.CardAmount); err != nil {
 			return fmt.Errorf("各クレジットカード名と各クレジットカードの残高の取得に失敗しました: %s", err)
 		}
 
-		details, err := c.detailRead(ctx, userId, card.CardId, startDay, lastDay)
+		details, err := c.detailRead(ctx, userId, card.CardId, officeName, startDay, lastDay)
 		if err != nil {
 			return fmt.Errorf("%sの明細取得に失敗しました: %s", card.CardName, err)
 		}
 
 		card.Detail = details
-
+		card.DetailCount = int64(len(details))
 		cardList = append(cardList, card)
-		PbCards.DetailCount = int64(len(details))
+
 	}
 	PbCards.Card = cardList
 
@@ -312,30 +261,13 @@ func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 }
 
 func GetLastId(userId string) (string, error) {
-	ctx := context.Background()
-	client, _ := spanner.NewClient(ctx, "projects/test-project/instances/test-instance/databases/test-database")
-	ro := client.ReadOnlyTransaction()
-	defer ro.Close()
-	stmt := spanner.Statement{SQL: `select LastId from Users where UserIdOfficeName = @UserId`, Params: map[string]interface{}{"UserId": userId}}
-	iter := ro.Query(ctx, stmt)
-	defer iter.Stop()
-
-	var lastId string
-
-	for {
-
-		row, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-
-		if err != nil {
-			return "", fmt.Errorf("明細のクエリ取得に失敗しました: %s", err)
-		}
-
-		if err := row.Columns(&lastId); err != nil {
-			return "", fmt.Errorf("明細の取得に失敗しました: %s", err)
-		}
+	client, err := sql.Open("mysql", "root@/freee")
+	if err != nil {
+		return "", err
 	}
+	defer client.Close()
+	var lastId string
+	client.QueryRow("SELECT lastId FROM Users where UserIdOfficeName = ?", userId).Scan(&lastId)
+
 	return lastId, nil
 }
