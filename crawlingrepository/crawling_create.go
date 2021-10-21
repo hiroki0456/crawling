@@ -3,7 +3,6 @@ package crawlingrepository
 import (
 	"database/sql"
 	"log"
-	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -31,13 +30,14 @@ func NewDatabase() DB {
 
 func (d *db) UserCreate(users []*User, userId string, updatedAt *time.Time) (err error) {
 	for _, v := range users {
+		v.UserId = userId
 		v.UserIdOfficeName = v.UserId + "_" + v.OfficeName
 
 		updateStmt, err := d.Client.Prepare("UPDATE Users set userIdOfficeName = ?,userId = ?,officeName = ?,lastId = ?,updatedAt = ? where officeName = ?")
 		if err != nil {
 			return err
 		}
-		result, err := updateStmt.Exec(v.UserIdOfficeName, userId, v.OfficeName, v.LastId, updatedAt, v.OfficeName)
+		result, err := updateStmt.Exec(v.UserIdOfficeName, v.UserId, v.OfficeName, v.LastId, updatedAt, v.OfficeName)
 		if err != nil {
 			return err
 		}
@@ -65,46 +65,42 @@ func (d *db) UserCreate(users []*User, userId string, updatedAt *time.Time) (err
 
 func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan error {
 	errCh := make(chan error)
-	var wg sync.WaitGroup
-	wg.Add(len(banks))
 	for _, v := range banks {
-		go func(v *Bank) {
-			defer wg.Done()
-			if v.Kind == "銀行口座" {
+		if v.Kind == "銀行口座" {
 
-				insertStmt, err := d.Client.Prepare("INSERT INTO Banks(userId,bankId,LastCommitDate,officeName,bankName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
-				if err != nil {
-					errCh <- err
-				}
-				_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
-				if err != nil {
-					errCh <- err
-				}
-
-			} else if v.Kind == "クレジットカード" {
-				insertStmt, err := d.Client.Prepare("INSERT INTO Cards(userId,cardId,LastCommitDate,officeName,cardName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
-				if err != nil {
-					errCh <- err
-				}
-				_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
-				if err != nil {
-					errCh <- err
-				}
-			} else {
-				insertStmt, err := d.Client.Prepare("INSERT INTO Others(userId,otherId,LastCommitDate,officeName,otherName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
-				if err != nil {
-					errCh <- err
-				}
-				_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
-				if err != nil {
-					errCh <- err
-				}
+			insertStmt, err := d.Client.Prepare("INSERT INTO Banks(userId,bankId,LastCommitDate,officeName,bankName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
+			if err != nil {
+				errCh <- err
 			}
-		}(v)
+			_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
+			if err != nil {
+				errCh <- err
+			}
+
+		} else if v.Kind == "クレジットカード" {
+			insertStmt, err := d.Client.Prepare("INSERT INTO Cards(userId,cardId,LastCommitDate,officeName,cardName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
+			if err != nil {
+				errCh <- err
+			}
+			_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
+			if err != nil {
+				errCh <- err
+			}
+		} else {
+			insertStmt, err := d.Client.Prepare("INSERT INTO Others(userId,otherId,LastCommitDate,officeName,otherName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
+			if err != nil {
+				errCh <- err
+			}
+			_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
+			if err != nil {
+				errCh <- err
+			}
+		}
 	}
 
 	go func() {
-		wg.Wait()
+		// wg.Wait()
+
 		close(errCh)
 	}()
 

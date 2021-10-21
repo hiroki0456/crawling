@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"net"
 	"time"
@@ -83,7 +82,7 @@ func (*server) FreeeRead(ctx context.Context, req *pb.FreeeRequest) (*pb.FreeeRe
 		office.Cards = crawlingrepository.PbCards
 	}
 
-	fmt.Println(len(offices[0].Cards.Card[1].Detail))
+	// fmt.Println(len(offices[0].Cards.Card[1].Detail))
 
 	return &pb.FreeeResponse{
 		Office: offices,

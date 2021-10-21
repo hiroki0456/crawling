@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"google.golang.org/grpc"
@@ -18,7 +19,7 @@ func main() {
 
 	c := pb.NewCrawlingServiceClient(cc)
 
-	// crawlingWrite(c)
+	crawlingWrite(c)
 	crawlingRead(c)
 	// //
 }
@@ -37,8 +38,9 @@ func crawlingRead(c pb.CrawlingServiceClient) {
 	if err != nil {
 		log.Fatalf("error while calling Greet RPC: %v", err)
 	}
-	log.Println(res.Office[0])
-	log.Println(res.Office[1])
+	fmt.Println(res)
+	// log.Println(res.Office[0])
+	// log.Println(res.Office[1])
 	// log.Println(res.Office[1])
 	// log.Println(res.Office[0].Banks.Bank[1].Detail)
 	// log.Println(res.Office[1].Banks.Bank[0].Detail)
