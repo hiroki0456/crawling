@@ -54,6 +54,19 @@ message Detail {
     google.protobuf.Timestamp updated_at = 7;
 }
 
+message HealthCheckRequest {
+    string user_id = 1;
+    string pass = 2;
+}
+
+message HealthCheckResponse {
+    bool is_success = 1;
+    bool illegal_url = 2;
+    bool illegal_login = 3;
+    bool illegal_access = 4;
+    bool illegal_get = 5;
+}
+
 message UserRequest {
     UserInput user_input = 1;
     string pass = 2;
@@ -62,10 +75,6 @@ message UserRequest {
 
 message UserResponse {
     bool is_success = 1;
-    bool illegal_url = 2;
-    bool illegal_login = 3;
-    bool illegal_access = 4;
-    bool illegal_get = 5;
 }
 
 message FreeeRequest {
@@ -84,4 +93,5 @@ message FreeeResponse {
 service CrawlingService {
     rpc UserHandler(UserRequest) returns (UserResponse) {};
     rpc FreeeRead(FreeeRequest) returns (FreeeResponse) {};
+    rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {};
 }

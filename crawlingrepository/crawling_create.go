@@ -10,8 +10,8 @@ import (
 
 type DB interface {
 	UserCreate(users []*User, userId string, updatedAt *time.Time) error
-	BankCreate(userId string, banks []*Bank, today *time.Time) <-chan error
-	DetailCreate(userId string, details []*Detail, today *time.Time) <-chan error
+	BankCreate(userId string, banks []*Bank, today *time.Time) error
+	DetailCreate(userId string, details []*Detail, today *time.Time) error
 }
 
 type db struct {
@@ -63,66 +63,53 @@ func (d *db) UserCreate(users []*User, userId string, updatedAt *time.Time) (err
 	return nil
 }
 
-func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) <-chan error {
-	errCh := make(chan error)
+func (d *db) BankCreate(userId string, banks []*Bank, today *time.Time) error {
 	for _, v := range banks {
 		if v.Kind == "銀行口座" {
 
 			insertStmt, err := d.Client.Prepare("INSERT INTO Banks(userId,bankId,LastCommitDate,officeName,bankName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
 			if err != nil {
-				errCh <- err
+				return err
 			}
 			_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
 			if err != nil {
-				errCh <- err
+				return err
 			}
 
 		} else if v.Kind == "クレジットカード" {
 			insertStmt, err := d.Client.Prepare("INSERT INTO Cards(userId,cardId,LastCommitDate,officeName,cardName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
 			if err != nil {
-				errCh <- err
+				return err
 			}
 			_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
 			if err != nil {
-				errCh <- err
+				return err
 			}
 		} else {
 			insertStmt, err := d.Client.Prepare("INSERT INTO Others(userId,otherId,LastCommitDate,officeName,otherName,amount,updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)")
 			if err != nil {
-				errCh <- err
+				return err
 			}
 			_, err = insertStmt.Exec(userId, v.BankId, v.LastCommit, v.OfficeName, v.BankName, v.Amount, today)
 			if err != nil {
-				errCh <- err
+				return err
 			}
 		}
 	}
 
-	go func() {
-		// wg.Wait()
-
-		close(errCh)
-	}()
-
-	return errCh
+	return nil
 }
 
-func (d *db) DetailCreate(userId string, details []*Detail, today *time.Time) <-chan error {
-	errCh := make(chan error)
-
+func (d *db) DetailCreate(userId string, details []*Detail, today *time.Time) error {
 	for _, v := range details {
 		insertStmt, err := d.Client.Prepare("INSERT INTO Details(userId, bankId, officeName, bankName, tradingDate, tradingContent, payment, withdrawal, balance, UpdatedDate, GettingDate, crawling) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		if err != nil {
-			errCh <- err
+			return err
 		}
 		_, err = insertStmt.Exec(userId, v.BankId, v.OfficeName, v.BankName, v.TradingDate, v.TradingContent, v.Payment, v.Withdrawal, v.Balance, v.UpdatedDate, v.GettingDate, today)
 		if err != nil {
-			errCh <- err
+			return err
 		}
 	}
-	go func() {
-		// wg.Wait()
-		close(errCh)
-	}()
-	return errCh
+	return nil
 }

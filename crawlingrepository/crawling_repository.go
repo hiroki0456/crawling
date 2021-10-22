@@ -33,7 +33,6 @@ type User struct {
 	UserId           string `spanner:"UserId"`
 	OfficeName       string `spanner:"OfficeName"`
 	LastId           string `spanner:"LastId"`
-	// UpdatedAt        *time.Time `spanner:"updatedAt"`
 }
 
 type Bank struct {
@@ -125,12 +124,7 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 			return fmt.Errorf("URLの遷移に失敗しました: %s", illegalCheck)
 		}
 		chromedp.WaitVisible(`.walletable_controls___StyledSpan-sc-11p3ona-0`, chromedp.ByQuery).Do(ctx)
-		// lastCommitNodes := []*cdp.Node{}
-		// chromedp.Nodes(`.walletable_controls___StyledSpan-sc-11p3ona-0`, &lastCommitNodes, chromedp.ByQueryAll).Do(ctx)
-		// for _, n := range lastCommitNodes {
-		// 	chromedp.Click(n.FullXPath(), chromedp.NodeVisible).Do(ctx)
-		// 	chromedp.WaitVisible(`.walletable_controls___StyledMdExpandLess-sc-11p3ona-1`, chromedp.ByQuery).Do(ctx)
-		// }
+
 		bankNode := []*cdp.Node{}
 		chromedp.Nodes(`.walletable_group___StyledDiv-sc-1uncx9n-0.dHyIIm`, &bankNode, chromedp.ByQueryAll).Do(ctx)
 		if len(bankNode) == 0 {
@@ -387,19 +381,6 @@ func scrapingDetails(dl []string, userId string) error {
 			strTradingDate := strings.Replace(v.Find("td.date-cell").Eq(0).Text(), "-", "/", -1)
 			strUpdatedDate := strings.Replace(v.Find("td.date-cell").Eq(1).Text(), "-", "/", -1)
 			strGettingDate := strings.Replace(v.Find("td.date-cell").Eq(2).Text(), "-", "/", -1)
-			// layout := "2006/01/02 15:04:05"
-			// tradingDate, err := time.Parse(layout, strTradingDate)
-			// if err != nil {
-			// 	log.Printf("dateへのconvertに失敗しました:　%v", err)
-			// }
-			// updatedDate, err := time.Parse(layout, strUpdatedDate)
-			// if err != nil {
-			// 	log.Printf("dateへのconvertに失敗しました:　%v", err)
-			// }
-			// gettingDate, err := time.Parse(layout, strGettingDate)
-			// if err != nil {
-			// 	log.Printf("dateへのconvertに失敗しました:　%v", err)
-			// }
 
 			var bankId string
 			for _, bank := range bankNameAndId {

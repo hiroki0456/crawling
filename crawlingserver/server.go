@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"net"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	pb "upsider.crawling/crawlingproto"
 	"upsider.crawling/crawlingrepository"
+	"upsider.crawling/healthcheck"
 )
 
 type server struct{}
@@ -22,11 +24,7 @@ func (*server) UserHandler(ctx context.Context, req *pb.UserRequest) (*pb.UserRe
 	err := newC.Crawling(req.Pass, req.UserInput)
 	if err != nil {
 		return &pb.UserResponse{
-			IsSuccess:     false,
-			IllegalUrl:    false,
-			IllegalAccess: false,
-			IllegalLogin:  false,
-			IllegalGet:    false,
+			IsSuccess: false,
 		}, err
 	}
 
@@ -36,15 +34,13 @@ func (*server) UserHandler(ctx context.Context, req *pb.UserRequest) (*pb.UserRe
 			IsSuccess: false,
 		}, err
 	}
-	if err := db.BankCreate(req.UserInput.UserId, crawlingrepository.Banks, &today); <-err != nil {
-		err := <-err
+	if err := db.BankCreate(req.UserInput.UserId, crawlingrepository.Banks, &today); err != nil {
 		return &pb.UserResponse{
 			IsSuccess: false,
 		}, err
 	}
 
-	if err := db.DetailCreate(req.UserInput.UserId, crawlingrepository.Details, &today); <-err != nil {
-		err := <-err
+	if err := db.DetailCreate(req.UserInput.UserId, crawlingrepository.Details, &today); err != nil {
 		return &pb.UserResponse{
 			IsSuccess: false,
 		}, err
@@ -82,10 +78,21 @@ func (*server) FreeeRead(ctx context.Context, req *pb.FreeeRequest) (*pb.FreeeRe
 		office.Cards = crawlingrepository.PbCards
 	}
 
-	// fmt.Println(len(offices[0].Cards.Card[1].Detail))
+	fmt.Println(offices[0])
 
 	return &pb.FreeeResponse{
 		Office: offices,
+	}, nil
+}
+
+func (*server) HealthCheck(ctx context.Context, req *pb.HealthCheckRequest) (res *pb.HealthCheckResponse, err error) {
+	h := healthcheck.NewHealthCheck()
+	err = h.AccessCheck(req)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.HealthCheckResponse{
+		IsSuccess: true,
 	}, nil
 }
 
