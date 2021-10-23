@@ -91,6 +91,12 @@ func (*server) HealthCheck(ctx context.Context, req *pb.HealthCheckRequest) (res
 	if err != nil {
 		return nil, err
 	}
+
+	err = h.LoginCheck(req)
+	if err != nil {
+		return nil, err
+	}
+
 	return &pb.HealthCheckResponse{
 		IsSuccess: true,
 	}, nil

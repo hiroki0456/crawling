@@ -65,6 +65,7 @@ func crawlingWrite(c pb.CrawlingServiceClient) {
 func crawlingHealthCheck(c pb.CrawlingServiceClient) {
 	req := &pb.HealthCheckRequest{
 		UserId: "volleyball0456@gmail.com",
+		Pass:   "hiro0456",
 	}
 
 	res, err := c.HealthCheck(context.Background(), req)

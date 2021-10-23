@@ -9,7 +9,7 @@ import (
 
 func NewChromedpContext() (ctx context.Context) {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
+		chromedp.Flag("headless", false),
 		chromedp.WindowSize(1920, 1080),
 		chromedp.Flag("remote-debugging-port", "9222"),
 	)
