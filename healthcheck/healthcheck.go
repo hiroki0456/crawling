@@ -56,7 +56,7 @@ func (*healthCheck) LoginCheck(req *pb.HealthCheckRequest) error {
 			var illegalCheck string
 			chromedp.Location(&illegalCheck).Do(ctx)
 			if illegalCheck != "https://secure.freee.co.jp/" {
-				return fmt.Errorf("ログインできませでした: %s", illegalCheck)
+				return fmt.Errorf("エラー: %s", "メールアドレスまたはパスワードが正しくありません。")
 			}
 			return nil
 		}),
