@@ -23,7 +23,7 @@ var userData1 User = User{
 var userData2 User = User{
 	Id:               "test_data1",
 	UserIdOfficeName: "hiroki_株式会社test2",
-	UserId:           "hiroki",
+	UserId:           "hiroki", 
 	OfficeName:       "株式会社test2",
 	LastId:           "12345678",
 }

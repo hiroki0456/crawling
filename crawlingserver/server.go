@@ -89,11 +89,19 @@ func (*server) HealthCheck(ctx context.Context, req *pb.HealthCheckRequest) (res
 	h := healthcheck.NewHealthCheck()
 	err = h.AccessCheck(req)
 	if err != nil {
+		healthcheck.NoticeSlack(err)
 		return nil, err
 	}
 
 	err = h.LoginCheck(req)
 	if err != nil {
+		healthcheck.NoticeSlack(err)
+		return nil, err
+	}
+
+	err = h.PageTransitionCheck(req)
+	if err != nil {
+		healthcheck.NoticeSlack(err)
 		return nil, err
 	}
 

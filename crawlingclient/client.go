@@ -7,7 +7,6 @@ import (
 
 	"google.golang.org/grpc"
 	pb "upsider.crawling/crawlingproto"
-	"upsider.crawling/healthcheck"
 )
 
 func main() {
@@ -71,7 +70,7 @@ func crawlingHealthCheck(c pb.CrawlingServiceClient) {
 
 	res, err := c.HealthCheck(context.Background(), req)
 	if err != nil {
-		healthcheck.NoticeSlack(err)
+		fmt.Println(err)
 		return
 	}
 

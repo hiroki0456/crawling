@@ -1,16 +1,26 @@
 package healthcheck
 
 import (
+	"fmt"
+
 	"github.com/slack-go/slack"
 )
 
-func NoticeSlack(illegalCheck error) {
+func NoticeSlack(res error) {
 	// divのワークスペースで使用できるアクセストークン
 	tkn := "xoxb-81666833746-2632126536469-qcIWScF3h2ba75TwH87XoQpw"
 	c := slack.New(tkn)
-
-	_, _, err := c.PostMessage("#example_test", slack.MsgOptionText(illegalCheck.Error(), true))
+	attachment := slack.Attachment{
+		Pretext: res.Error(),
+	}
+	_, _, err := c.PostMessage(
+		"#example_test",
+		slack.MsgOptionText("*【freee】のヘルスチェックが失敗しました。*", true),
+		slack.MsgOptionAttachments(attachment),
+		slack.MsgOptionAsUser(true),
+	)
 	if err != nil {
-		panic(err)
+		fmt.Printf("%s\n", err)
+		return
 	}
 }
