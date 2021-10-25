@@ -46,6 +46,7 @@ func (*healthCheck) LoginCheck(req *pb.HealthCheckRequest) error {
 
 	ctx, cancel := context.WithTimeout(config.NewChromedpContext(), 3*time.Minute)
 	defer cancel()
+
 	loginURL := "https://accounts.secure.freee.co.jp/login/accounting"
 
 	err := chromedp.Run(ctx,
@@ -56,7 +57,6 @@ func (*healthCheck) LoginCheck(req *pb.HealthCheckRequest) error {
 			chromedp.SendKeys(`//input[@name="email"]`, req.UserId).Do(ctx)
 			chromedp.SendKeys(`//input[@name="password"]`, req.Pass).Do(ctx)
 			chromedp.Submit(`//input[@name="password"]`).Do(ctx)
-
 			var illegalCheck string
 			chromedp.Location(&illegalCheck).Do(ctx)
 			if illegalCheck != "https://secure.freee.co.jp/" {
@@ -72,10 +72,11 @@ func (*healthCheck) PageTransitionCheck(req *pb.HealthCheckRequest) error {
 
 	ctx, cancel := context.WithTimeout(config.NewChromedpContext(), 3*time.Minute)
 	defer cancel()
-	officeURL := "https://secure.freee.co.jp/user/show_companies"
-	detailURL := "https://secure.freee.co.jp/wallet_txns"
-	topURL := "https://secure.freee.co.jp/"
+
 	loginURL := "https://accounts.secure.freee.co.jp/login/accounting"
+	topURL := "https://secure.freee.co.jp/"
+	detailURL := "https://secure.freee.co.jp/wallet_txns"
+	officeURL := "https://secure.freee.co.jp/user/show_companies"
 
 	err := chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
@@ -88,26 +89,32 @@ func (*healthCheck) PageTransitionCheck(req *pb.HealthCheckRequest) error {
 
 			var illegalCheck string
 			chromedp.Location(&illegalCheck).Do(ctx)
-
 			if illegalCheck != topURL {
-				return fmt.Errorf("画面遷移エラー【topページ】: %s", illegalCheck)
+				return fmt.Errorf("画面遷移エラー【Topページ】: %s", illegalCheck)
 			}
-			chromedp.WaitVisible(`#footer`).Do(ctx)
 
+			chromedp.WaitVisible(`#footer`).Do(ctx)
 			chromedp.Navigate(detailURL).Do(ctx)
 			chromedp.Location(&illegalCheck).Do(ctx)
+			var resText string
+			findText := &resText
 			if illegalCheck != detailURL {
-				return fmt.Errorf("画面遷移エラー【口座詳細ページ】: %s", illegalCheck)
+				chromedp.Text(`/html/body/div[2]/div/div[1]/h1`, findText).Do(ctx)
+				if resText == "ページが見つかりませんでした" {
+					return fmt.Errorf("画面遷移エラー【口座明細一覧ページ】: %s", illegalCheck)
+				}
 			}
-			chromedp.WaitVisible(`#footer`).Do(ctx)
 
+			chromedp.WaitVisible(`#footer`).Do(ctx)
 			chromedp.Navigate(officeURL).Do(ctx)
 			chromedp.Location(&illegalCheck).Do(ctx)
-			if illegalCheck != officeURL {
-				return fmt.Errorf("面遷移エラー【事業所詳細ページ】: %s", illegalCheck)
+			if illegalCheck != detailURL {
+				chromedp.Text(`/html/body/div[2]/div/div[1]/h1`, findText).Do(ctx)
+				if resText == "ページが見つかりませんでした" {
+					return fmt.Errorf("画面遷移エラー【事業所切り替えページ】: %s", illegalCheck)
+				}
 			}
 			return nil
-
 		}),
 	)
 	return err
