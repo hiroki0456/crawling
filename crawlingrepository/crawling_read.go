@@ -27,8 +27,8 @@ type Date struct {
 	updatedAt  time.Time
 }
 
-var PbBanks *pb.Banks
-var PbCards *pb.Cards
+var PbBanks []*pb.Bank
+var PbCards []*pb.Card
 
 func NewCrawlingRead(db *sql.DB) CrawlingReadInterface {
 	return &CrawlingRead{db}
@@ -48,22 +48,15 @@ func (c *CrawlingRead) OfficeRead(ctx context.Context, req *pb.FreeeRequest) (of
 		if err != nil {
 			return nil, fmt.Errorf("事業所名の取得に失敗しました: %s", err)
 		}
+
 		office.Crawling = timestamppb.New(date.updatedAt)
-
 		offices = append(offices, office)
-	}
-
-	err = rows.Err()
-	if err != nil {
-		panic(err.Error())
 	}
 
 	return offices, nil
 }
 
 func (c *CrawlingRead) BankRead(ctx context.Context, req *pb.FreeeRequest, officeName string, startDay string, lastDay string) (err error) {
-	PbBanks = &pb.Banks{}
-
 	err = getBankDetails(c, ctx, req.UserInput.UserId, officeName, startDay, lastDay)
 	if err != nil {
 		return err
@@ -73,8 +66,6 @@ func (c *CrawlingRead) BankRead(ctx context.Context, req *pb.FreeeRequest, offic
 }
 
 func (c *CrawlingRead) CardRead(ctx context.Context, req *pb.FreeeRequest, officeName string, startDay string, lastDay string) (err error) {
-	PbCards = &pb.Cards{}
-
 	err = getCardDetails(c, ctx, req.UserInput.UserId, officeName, startDay, lastDay)
 	if err != nil {
 		return err
@@ -88,8 +79,9 @@ func (c *CrawlingRead) detailRead(ctx context.Context, userId string, bankId str
 	if err != nil {
 		return nil, fmt.Errorf("明細のクエリ取得に失敗しました: %s", err)
 	}
-	details = []*pb.Detail{}
+	defer rows.Close()
 
+	details = []*pb.Detail{}
 	for rows.Next() {
 		detail := &pb.Detail{}
 		date := &Date{}
@@ -112,7 +104,7 @@ func getBankDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 	if err != nil {
 		return fmt.Errorf("銀行IDと銀行名の取得クエリの作成に失敗しました: %s", err)
 	}
-	bankList := []*pb.Bank{}
+	defer rows.Close()
 
 	for rows.Next() {
 		bank := &pb.Bank{}
@@ -125,9 +117,8 @@ func getBankDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 			return fmt.Errorf("%sの明細取得に失敗しました: %s", bank.BankName, err)
 		}
 		bank.Details = details
-		bankList = append(bankList, bank)
+		PbBanks = append(PbBanks, bank)
 	}
-	PbBanks.Bank = bankList
 
 	return nil
 }
@@ -137,12 +128,10 @@ func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 	if err != nil {
 		return fmt.Errorf("各クレジットカード名と各クレジットカード残高のクエリ取得に失敗しました: %s", err)
 	}
-
-	cardList := []*pb.Card{}
+	defer rows.Close()
 
 	for rows.Next() {
 		card := &pb.Card{}
-
 		if err := rows.Scan(&card.CardId, &card.CardName); err != nil {
 			return fmt.Errorf("各クレジットカード名と各クレジットカードの残高の取得に失敗しました: %s", err)
 		}
@@ -151,12 +140,9 @@ func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 		if err != nil {
 			return fmt.Errorf("%sの明細取得に失敗しました: %s", card.CardName, err)
 		}
-
-		card.Detail = details
-		cardList = append(cardList, card)
-
+		card.Details = details
+		PbCards = append(PbCards, card)
 	}
-	PbCards.Card = cardList
 
 	return nil
 }
@@ -167,6 +153,7 @@ func GetLastId(userId string) (string, error) {
 		return "", err
 	}
 	defer client.Close()
+
 	var lastId string
 	client.QueryRow("SELECT lastId FROM Users where UserIdOfficeName = ?", userId).Scan(&lastId)
 

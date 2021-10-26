@@ -12,8 +12,8 @@ message UserInput {
 message Office {
     string office_name = 1;
     google.protobuf.Timestamp crawling = 2;
-    Banks banks = 3;
-    Cards cards = 4;
+    repeated Bank banks = 3;
+    repeated Card cards = 4;
 }
 
 message Bank {
@@ -22,19 +22,19 @@ message Bank {
     repeated Detail details = 3;
 }
 
-message Banks {
-    repeated Bank bank = 1;
-}
+// message Banks {
+//     repeated Bank bank = 1;
+// }
 
 message Card {
     string card_id = 1;
     string card_name = 2;
-    repeated Detail detail = 3;
+    repeated Detail details = 3;
 }
 
-message Cards {
-    repeated Card card = 3;
-}
+// message Cards {
+//     repeated Card card = 3;
+// }
 
 message Detail {
     string detail_name = 1;
