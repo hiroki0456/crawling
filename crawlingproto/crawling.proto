@@ -19,28 +19,20 @@ message Office {
 message Bank {
     string bank_id = 1;
     string bank_name = 2;
-    int64 bank_amount = 3;
-    int64 detail_count = 4;
-    repeated Detail detail = 5;
+    repeated Detail details = 3;
 }
 
 message Banks {
-    int64 bank_sum = 1;
-    int64 bank_count = 2;
-    repeated Bank bank = 3;
+    repeated Bank bank = 1;
 }
 
 message Card {
     string card_id = 1;
     string card_name = 2;
-    int64 card_amount = 3;
-    int64 detail_count = 4;
-    repeated Detail detail = 5;
+    repeated Detail detail = 3;
 }
 
 message Cards {
-    int64 card_sum = 1;
-    int64 card_count = 2;
     repeated Card card = 3;
 }
 
@@ -87,7 +79,6 @@ message FreeeRequest {
 
 message FreeeResponse {
     repeated Office office = 1;
-    // repeated Details details = 3;
 }
 
 service CrawlingService {

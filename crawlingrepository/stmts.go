@@ -1,9 +1,5 @@
 package crawlingrepository
 
-import (
-	"strconv"
-)
-
 func OfficeReadStmt() string {
 	s := `SELECT
 			OfficeName, updatedAt
@@ -15,48 +11,14 @@ func OfficeReadStmt() string {
 	return s
 }
 
-func DistinctBankNameCountStmt() string {
+func DistinctBankIdAndBankNameStmt() string {
 	s := `SELECT
-			count(distinct BankName)
-				FROM
-					banks
-				WHERE
-					UserId = ? and OfficeName = ?`
-	return s
-}
-
-func SumAmountOnBanksStmt(bankCount int64) string {
-	s := `SELECT
-					sum(amount)
-				FROM
-					(SELECT
-							amount
-						FROM
-							banks
-						WHERE
-							UserId = ? and OfficeName = ?
-						ORDER BY
-							updatedAt desc
-						LIMIT
-							` + strconv.Itoa(int(bankCount)) + `) as bank`
-
-	return s
-}
-
-func BankNameAndBankAmountStmt(bankCount int64) string {
-	s := `SELECT
-			BankId, BankName, Amount
-				FROM
-					(SELECT
-							*
-						FROM
-							banks
-						WHERE
-							UserId = ? and OfficeName = ?
-						ORDER BY
-							updatedAt desc
-						LIMIT
-							` + strconv.Itoa(int(bankCount)) + `) as bank`
+				DISTINCT bankId,
+				bankName
+			FROM
+				Banks
+			WHERE
+				UserId = ? and OfficeName = ?;`
 	return s
 }
 
@@ -82,48 +44,13 @@ func DetailStmt(startDay string, lastDay string) string {
 	return s
 }
 
-func CardCountStmt() string {
+func DistinctCardIdAndCardNameStmt() string {
 	s := `SELECT
-			count(distinct CardName)
-				FROM
-					cards
-				WHERE
-					UserId = ? and OfficeName = ?`
-	return s
-}
-
-func CardSumStmt(cardCount int64) string {
-	s := `SELECT
-			sum(amount)
-				FROM
-					(SELECT
-							amount
-						FROM
-							cards
-						WHERE
-							UserId = ? and OfficeName = ?
-						ORDER BY
-							updatedAt desc
-						LIMIT
-							` + strconv.Itoa(int(cardCount)) +
-		`) as card`
-	return s
-}
-
-func CardInfoStmt(cardCount int64) string {
-	s := `SELECT
-			CardId, CardName, Amount
-				FROM
-					(SELECT
-							*
-						FROM
-							cards
-						WHERE
-							UserId = ? and OfficeName = ?
-						ORDER BY
-							updatedAt desc
-						LIMIT
-							` + strconv.Itoa(int(cardCount)) + `) as card`
-
+				DISTINCT CardId,
+				CardName
+			FROM
+				Cards
+			WHERE
+				UserId = ? and OfficeName = ?`
 	return s
 }

@@ -63,19 +63,6 @@ func (c *CrawlingRead) OfficeRead(ctx context.Context, req *pb.FreeeRequest) (of
 
 func (c *CrawlingRead) BankRead(ctx context.Context, req *pb.FreeeRequest, officeName string, startDay string, lastDay string) (err error) {
 	PbBanks = &pb.Banks{}
-	err = getBankCount(c, ctx, req.UserInput.UserId, officeName)
-	if err != nil {
-		return err
-	}
-
-	if PbBanks.BankCount == 0 {
-		return nil
-	}
-
-	err = getBankSum(c, ctx, req.UserInput.UserId, officeName)
-	if err != nil {
-		return err
-	}
 
 	err = getBankDetails(c, ctx, req.UserInput.UserId, officeName, startDay, lastDay)
 	if err != nil {
@@ -87,20 +74,6 @@ func (c *CrawlingRead) BankRead(ctx context.Context, req *pb.FreeeRequest, offic
 
 func (c *CrawlingRead) CardRead(ctx context.Context, req *pb.FreeeRequest, officeName string, startDay string, lastDay string) (err error) {
 	PbCards = &pb.Cards{}
-
-	err = getCardCount(c, ctx, req.UserInput.UserId, officeName)
-	if err != nil {
-		return err
-	}
-
-	if PbCards.CardCount == 0 {
-		return nil
-	}
-
-	err = getCardSum(c, ctx, req.UserInput.UserId, officeName)
-	if err != nil {
-		return err
-	}
 
 	err = getCardDetails(c, ctx, req.UserInput.UserId, officeName, startDay, lastDay)
 	if err != nil {
@@ -134,67 +107,24 @@ func (c *CrawlingRead) detailRead(ctx context.Context, userId string, bankId str
 	return details, nil
 }
 
-func getBankCount(c *CrawlingRead, ctx context.Context, userId string, officeName string) error {
-	rows, err := c.client.Query(DistinctBankNameCountStmt(), userId, officeName)
-	if err != nil {
-		return fmt.Errorf("銀行口座数のクエリ取得に失敗しました: %s", err)
-	}
-
-	for rows.Next() {
-		err := rows.Scan(&PbBanks.BankCount)
-		if err != nil {
-			return fmt.Errorf("銀行口座数の取得に失敗しました: %s", err)
-		}
-	}
-
-	err = rows.Err()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	return nil
-}
-
-func getBankSum(c *CrawlingRead, ctx context.Context, userId string, officeName string) error {
-	rows, err := c.client.Query(SumAmountOnBanksStmt(PbBanks.BankCount), userId, officeName)
-	if err != nil {
-		return fmt.Errorf("銀行口座残高のクエリ取得に失敗しました: %s", err)
-	}
-
-	for rows.Next() {
-		err := rows.Scan(&PbBanks.BankSum)
-		if err != nil {
-			return fmt.Errorf("銀行口残高の取得に失敗しました: %s", err)
-		}
-	}
-
-	err = rows.Err()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	return nil
-}
-
 func getBankDetails(c *CrawlingRead, ctx context.Context, userId string, officeName string, startDay string, lastDay string) error {
-	rows, err := c.client.Query(BankNameAndBankAmountStmt(PbBanks.BankCount), userId, officeName)
+	rows, err := c.client.Query(DistinctBankIdAndBankNameStmt(), userId, officeName)
 	if err != nil {
-		return fmt.Errorf("各銀行名と各銀行の残高のクエリ取得に失敗しました: %s", err)
+		return fmt.Errorf("銀行IDと銀行名の取得クエリの作成に失敗しました: %s", err)
 	}
 	bankList := []*pb.Bank{}
 
 	for rows.Next() {
 		bank := &pb.Bank{}
-		if err := rows.Scan(&bank.BankId, &bank.BankName, &bank.BankAmount); err != nil {
-			return fmt.Errorf("各銀行名と各銀行の残高の取得に失敗しました: %s", err)
+		if err := rows.Scan(&bank.BankId, &bank.BankName); err != nil {
+			return fmt.Errorf("銀行IDと銀行名の取得に失敗しました: %s", err)
 		}
 
 		details, err := c.detailRead(ctx, userId, bank.BankId, officeName, startDay, lastDay)
 		if err != nil {
 			return fmt.Errorf("%sの明細取得に失敗しました: %s", bank.BankName, err)
 		}
-		bank.Detail = details
-		bank.DetailCount = int64(len(details))
+		bank.Details = details
 		bankList = append(bankList, bank)
 	}
 	PbBanks.Bank = bankList
@@ -202,36 +132,8 @@ func getBankDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 	return nil
 }
 
-func getCardCount(c *CrawlingRead, ctx context.Context, userId string, officeName string) error {
-	rows, err := c.client.Query(CardCountStmt(), userId, officeName)
-	if err != nil {
-		return fmt.Errorf("クレジットカード数のクエリ取得に失敗しました: %s", err)
-	}
-
-	for rows.Next() {
-		if err := rows.Scan(&PbCards.CardCount); err != nil {
-			return fmt.Errorf("クレジットカード数の取得に失敗しました: %s", err)
-		}
-	}
-	return nil
-}
-
-func getCardSum(c *CrawlingRead, ctx context.Context, userId string, officeName string) error {
-	rows, err := c.client.Query(CardSumStmt(PbCards.CardCount), userId, officeName)
-	if err != nil {
-		return fmt.Errorf("クレジットカード残高のクエリ取得に失敗しました: %s", err)
-	}
-
-	for rows.Next() {
-		if err := rows.Scan(&PbCards.CardSum); err != nil {
-			return fmt.Errorf("クレジットカード残高の取得に失敗しました: %s", err)
-		}
-	}
-	return nil
-}
-
 func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeName string, startDay string, lastDay string) error {
-	rows, err := c.client.Query(CardInfoStmt(PbCards.CardCount), userId, officeName)
+	rows, err := c.client.Query(DistinctCardIdAndCardNameStmt(), userId, officeName)
 	if err != nil {
 		return fmt.Errorf("各クレジットカード名と各クレジットカード残高のクエリ取得に失敗しました: %s", err)
 	}
@@ -241,7 +143,7 @@ func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 	for rows.Next() {
 		card := &pb.Card{}
 
-		if err := rows.Scan(&card.CardId, &card.CardName, &card.CardAmount); err != nil {
+		if err := rows.Scan(&card.CardId, &card.CardName); err != nil {
 			return fmt.Errorf("各クレジットカード名と各クレジットカードの残高の取得に失敗しました: %s", err)
 		}
 
@@ -251,7 +153,6 @@ func getCardDetails(c *CrawlingRead, ctx context.Context, userId string, officeN
 		}
 
 		card.Detail = details
-		card.DetailCount = int64(len(details))
 		cardList = append(cardList, card)
 
 	}

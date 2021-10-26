@@ -69,12 +69,13 @@ var Details []*Detail
 
 // スクレイピング時に必要な事業所名、銀行口座名、銀行口座ID
 var bankNameAndId []map[string]string
+var bankNameAndStatus []map[string]string
 var officeName string
 
 func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInput) error {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
-		chromedp.WindowSize(1920, 1080),
+		chromedp.Flag("headless", false),
+		// chromedp.WindowSize(1920, 1080),
 		chromedp.Flag("remote-debugging-port", "9222"),
 	)
 
@@ -123,6 +124,28 @@ func (c *crawlingRepository) Crawling(pass string, input *crawlingproto.UserInpu
 		if illegalCheck == "chrome-error://chromewebdata/" {
 			return fmt.Errorf("URLの遷移に失敗しました: %s", illegalCheck)
 		}
+		chromedp.WaitVisible(`.walletable_controls___StyledSpan-sc-11p3ona-0`, chromedp.ByQuery).Do(ctx)
+
+		var hrefNodes []*cdp.Node
+		var hrefValues []string
+		chromedp.Nodes(`.walletable___StyledA-sc-3etvmj-3.jQDpRS`, &hrefNodes, chromedp.ByQueryAll).Do(ctx)
+		for _, v := range hrefNodes {
+			var hrefText string
+			var ok bool
+			chromedp.AttributeValue(v.FullXPath(), `href`, &hrefText, &ok, chromedp.BySearch).Do(ctx)
+			hrefValues = append(hrefValues, hrefText)
+		}
+
+		for i := 0; i < len(hrefValues)-1; i++ {
+			chromedp.Navigate(`https://secure.freee.co.jp` + hrefValues[i]).Do(ctx)
+			var bankName string
+			chromedp.Text(`.walletable-name`, &bankName, chromedp.ByQuery).Do(ctx)
+			var bankStatus string
+			chromedp.Text(`.walletable-detail-label > span`, &bankStatus, chromedp.ByQuery).Do(ctx)
+			bankNameAndStatus = append(bankNameAndStatus, map[string]string{"officeName": officeName, "bankName": bankName, "bankStatus": bankStatus})
+		}
+
+		chromedp.Navigate(topURL).Do(ctx)
 		chromedp.WaitVisible(`.walletable_controls___StyledSpan-sc-11p3ona-0`, chromedp.ByQuery).Do(ctx)
 
 		bankNode := []*cdp.Node{}
@@ -292,7 +315,7 @@ func scrapingOfBanks(d string, lastCommit string) error {
 		return err
 	}
 
-	lastCommit = strings.Replace(lastCommit, "最終同期日時\n", "", -1)
+	// lastCommit = strings.Replace(lastCommit, "最終同期日時\n", "", -1)
 
 	contentsDom.Find(`div.walletable___StyledDiv-sc-3etvmj-0`).Each(func(i int, v *goquery.Selection) {
 		strAmount := v.Find("div.walletable___StyledDiv8-sc-3etvmj-8").Text()
@@ -303,10 +326,17 @@ func scrapingOfBanks(d string, lastCommit string) error {
 			return
 		}
 
+		var bankStatus string
+		for _, val := range bankNameAndStatus {
+			if val["officeName"] == officeName && val["bankName"] == v.Find("a.walletable___StyledA-sc-3etvmj-3").Text() {
+				bankStatus = val["bankStatus"]
+			}
+		}
+
 		Banks = append(Banks, &Bank{
 			Id:         uuid.NewString(),
 			OfficeName: officeName,
-			LastCommit: lastCommit,
+			LastCommit: bankStatus,
 			BankName:   v.Find("a.walletable___StyledA-sc-3etvmj-3").Text(),
 			Amount:     amount,
 			Kind:       v.Parent().Parent().Find("h2.vb-sectionTitle").Text(),

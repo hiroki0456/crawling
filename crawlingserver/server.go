@@ -3,12 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
-	"net"
 	"time"
 
-	"google.golang.org/grpc"
 	pb "upsider.crawling/crawlingproto"
 	"upsider.crawling/crawlingrepository"
 	"upsider.crawling/healthcheck"
@@ -78,8 +75,6 @@ func (*server) FreeeRead(ctx context.Context, req *pb.FreeeRequest) (*pb.FreeeRe
 		office.Cards = crawlingrepository.PbCards
 	}
 
-	fmt.Println(offices[0])
-
 	return &pb.FreeeResponse{
 		Office: offices,
 	}, nil
@@ -108,18 +103,4 @@ func (*server) HealthCheck(ctx context.Context, req *pb.HealthCheckRequest) (res
 	return &pb.HealthCheckResponse{
 		IsSuccess: true,
 	}, nil
-}
-
-func main() {
-	lis, err := net.Listen("tcp", ":50051")
-	if err != nil {
-		log.Fatalf("Failed to listen %v", err)
-	}
-
-	s := grpc.NewServer()
-	pb.RegisterCrawlingServiceServer(s, &server{})
-
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
 }

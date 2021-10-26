@@ -19,9 +19,9 @@ func main() {
 
 	c := pb.NewCrawlingServiceClient(cc)
 
-	// crawlingWrite(c)
+	crawlingWrite(c)
 	// crawlingRead(c)
-	crawlingHealthCheck(c)
+	// crawlingHealthCheck(c)
 	// //
 }
 
@@ -38,7 +38,7 @@ func crawlingRead(c pb.CrawlingServiceClient) {
 	if err != nil {
 		log.Fatalf("error while calling Greet RPC: %v", err)
 	}
-	fmt.Println(res)
+	fmt.Println(res.Office[0])
 	// log.Println(res.Office[0])
 	// log.Println(res.Office[1])
 	// log.Println(res.Office[1])
@@ -52,6 +52,7 @@ func crawlingWrite(c pb.CrawlingServiceClient) {
 		UserInput: &pb.UserInput{
 			UserId: "volleyball0456@gmail.com",
 		},
+		Pass:     "hiro0456",
 		SiteKind: 1,
 	}
 
