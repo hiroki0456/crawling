@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"net"
 	"time"
 
+	"google.golang.org/grpc"
 	pb "upsider.crawling/crawlingproto"
 	"upsider.crawling/crawlingrepository"
 	"upsider.crawling/healthcheck"
@@ -100,7 +102,27 @@ func (*server) HealthCheck(ctx context.Context, req *pb.HealthCheckRequest) (res
 		return nil, err
 	}
 
+	err = h.CrawlingCheck(req)
+	if err != nil {
+		healthcheck.NoticeSlack(err)
+		return nil, err
+	}
+
 	return &pb.HealthCheckResponse{
 		IsSuccess: true,
 	}, nil
+}
+
+func main() {
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		log.Fatalf("Failed to listen %v", err)
+	}
+
+	s := grpc.NewServer()
+	pb.RegisterCrawlingServiceServer(s, &server{})
+
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 }

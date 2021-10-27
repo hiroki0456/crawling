@@ -7,8 +7,7 @@ import (
 )
 
 func NoticeSlack(res error) {
-	// divのワークスペースで使用できるアクセストークン
-	tkn := "xoxb-81666833746-2632126536469-qcIWScF3h2ba75TwH87XoQpw"
+	tkn := "xoxb-81666833746-2632126536469-lZBFnZZg5tfEeseJprseKm6K"
 	c := slack.New(tkn)
 	attachment := slack.Attachment{
 		Pretext: res.Error(),

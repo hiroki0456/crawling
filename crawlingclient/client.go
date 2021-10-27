@@ -20,8 +20,8 @@ func main() {
 	c := pb.NewCrawlingServiceClient(cc)
 
 	// crawlingWrite(c)
-	crawlingRead(c)
-	// crawlingHealthCheck(c)
+	// crawlingRead(c)
+	crawlingHealthCheck(c)
 	// //
 }
 
